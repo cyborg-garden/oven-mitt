@@ -9,6 +9,7 @@
 //! - `review`: rule-based findings (M6).
 
 pub mod canon;
+pub mod review;
 pub mod verify;
 pub mod writer;
 

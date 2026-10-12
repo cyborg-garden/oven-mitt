@@ -130,8 +130,13 @@ fn main() -> ExitCode {
             command: AuditCommand::Head,
         } => cli::audit::head(&cli.config),
         Command::Audit {
-            command: AuditCommand::Review { .. },
-        } => not_yet("audit review", "M6"),
+            command:
+                AuditCommand::Review {
+                    since,
+                    threshold,
+                    json,
+                },
+        } => cli::audit::review(&cli.config, since.as_deref(), threshold.as_deref(), json),
         Command::Credential {
             command: CredentialCommand::Issue { name, vaults },
         } => cli::credential::issue(&cli.config, &name, &vaults),
@@ -141,8 +146,12 @@ fn main() -> ExitCode {
         Command::Credential {
             command: CredentialCommand::Revoke { id },
         } => cli::credential::revoke(&cli.config, &id),
-        Command::Vault { .. } => not_yet("vault", "M6"),
-        Command::Object { .. } => not_yet("object", "M6"),
+        Command::Vault {
+            command: VaultCommand::List,
+        } => cli::vault::list(&cli.config),
+        Command::Object {
+            command: ObjectCommand::Stat { handle },
+        } => cli::object::stat(&cli.config, &handle),
     };
     match result {
         Ok(code) => code,
@@ -173,8 +182,4 @@ fn run_daemon(config: &std::path::Path) -> anyhow::Result<ExitCode> {
     let rt = tokio::runtime::Runtime::new()?;
     rt.block_on(ovenmitt::daemon::run_prepared(prepared))?;
     Ok(ExitCode::SUCCESS)
-}
-
-fn not_yet(what: &str, milestone: &str) -> anyhow::Result<ExitCode> {
-    anyhow::bail!("`{what}` is not implemented yet (arrives in {milestone})")
 }

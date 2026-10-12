@@ -170,13 +170,16 @@ expose_names = false
         }
     }
 
-    pub async fn stop(mut self) {
+    /// Stop the daemon. Returns the temp dir so a test can keep inspecting
+    /// files after shutdown; dropping it removes everything.
+    pub async fn stop(mut self) -> tempfile::TempDir {
         if let Some(tx) = self.shutdown.take() {
             let _ = tx.send(());
         }
         if let Some(t) = self.task.take() {
             let _ = tokio::time::timeout(std::time::Duration::from_secs(5), t).await;
         }
+        std::mem::replace(&mut self.dir, tempfile::tempdir().unwrap())
     }
 
     /// One request, one connection. Headers given as (name, value).

@@ -477,6 +477,32 @@ impl Store {
     }
 }
 
+/// Operator-only, side-effect-free read of one object straight from disk:
+/// no index, no sweep, no key creation. Safe to run beside a live daemon.
+/// Returns `None` if the object directory doesn't exist.
+pub fn read_object_offline(
+    data_dir: &Path,
+    keystore: &KeyStore,
+    handle: &Handle,
+) -> Result<Option<(ObjectMeta, PrivateMeta)>, StoreError> {
+    let dir = layout::object_dir(&data_dir.join("objects"), handle);
+    let meta_bytes = match fs::read(dir.join(META_JSON)) {
+        Ok(b) => b,
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(e) => return Err(e.into()),
+    };
+    let meta: ObjectMeta =
+        serde_json::from_slice(&meta_bytes).map_err(|e| StoreError::Corrupt {
+            handle: handle.clone(),
+            detail: format!("metadata unparsable: {e}"),
+        })?;
+    let kek = keystore
+        .load(&meta.vault)?
+        .ok_or_else(|| StoreError::Startup(format!("no key for vault {:?}", meta.vault)))?;
+    let private = load_private(&kek, handle, &dir.join(layout::gen_name(meta.generation)))?;
+    Ok(Some((meta, private)))
+}
+
 fn validate_params(p: &PutParams) -> Result<(), StoreError> {
     if let Some(n) = &p.name {
         meta::validate_name(n).map_err(StoreError::NameInvalid)?;

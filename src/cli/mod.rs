@@ -4,3 +4,5 @@
 pub mod audit;
 pub mod config;
 pub mod credential;
+pub mod object;
+pub mod vault;

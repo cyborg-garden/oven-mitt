@@ -5,6 +5,7 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 ## [Unreleased]
 
 ### Added
+- M6: `ovenmitt audit review` — rules file with defaults (refusal, first_destination, burst, churn, chain), `--since`, `--threshold`, `--json`, findings on stderr ranked by severity, exit 0/1/2; `ovenmitt vault list`; `ovenmitt object stat` reading one object straight from disk beside a live daemon (R-REV-1..4, R-VLT-4, R-OBJ-11; AT-11, AT-24, AT-29).
 - M5: consumer credentials (`ovm_<id>_<secret>`, hashed on disk, vault-scoped, re-read on change so revoke needs no restart) and `POST /v1/objects/{handle}/resolve` — the one route that returns bytes — with the R-RES-2 check order; `ovenmitt credential issue|list|revoke` (R-CRD-1..4, R-RES-1..5; AT-4, AT-5 full table, AT-17; SI-1, SI-5, SI-14).
 - M4: HTTP/1.1 API over the Unix socket — every route except `resolve`, the closed error-code set with fixed messages, protocol header guard, bodiless-route guard, one outcome path that writes the audit entry before the response, streaming put/replace, TTL sweep task, graceful shutdown, `ovenmitt daemon` (PRD §4, §7; AT-1, 5, 6, 7, 14, 15, 16, 22, 23, 25, 27; SI-6/8/15 sweeps).
 - M3: audit writer (single thread, fsync-before-ack, canonical lines, clamped clock), chain verify with a named first break, `ovenmitt audit verify|head`, broken chain refuses startup (R-AUD-1..7, AT-12, AT-23 logic, D-1).
