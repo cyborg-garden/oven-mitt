@@ -27,7 +27,7 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 │                                                  │        │   ├─ data/   ciphertext only     │
 │                                                  │        │   ├─ keys/   never leaves        │
 └───────────────────────────────-──────────────────┘        │   ├─ audit/  hash-chained JSONL  │
-                                                            │   └─ export                    ──-─▶ configured/allowed export paths 
+                                                            │   └─ export                    ──-─▶ allowed export paths 
                                                             └──────────────────────────────────┘
 ```
 
