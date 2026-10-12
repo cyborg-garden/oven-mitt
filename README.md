@@ -1,16 +1,20 @@
-# ovenmitt
+# oven-mitt
 
 [![rust](https://github.com/utunga/oven-mitt/actions/workflows/rust.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/rust.yml)
 [![python](https://github.com/utunga/oven-mitt/actions/workflows/python.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/python.yml)
 [![e2e](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml)
 
-*Handle the hot thing without touching it.*
+*Allow AI agents to manipulate data and files without sending data to their servers.*
 
-ovenmitt is a write-only vault for AI agents. Data goes in, an opaque handle comes out. The agent can label, export and send that data by handle — and nothing on the socket can read it back without a credential the agent doesn't have. It exists so that an agent can move data that must never enter an LLM's context (because the provider may retain or train on it) without that data ever appearing in a tool result.
+oven-mitt is an arms-length vault for AI agents. Data goes in, an opaque handle comes out. The agent can label, export and send that data to their users or on to other processes using the handle — but nothing on the socket can be read back into the agents context without a credential (that the agent doesn't have).
 
-The promise is that it is **hard, not impossible** to read data into LLM. The threat that manages against is accidental leakage: an agent hallucination, careless tool code, a misconfiguration.
+This is intended to be generally useful but was motivated by a desire to comply with the [Kaitiakitanga License](https://github.com/TeHikuMedia/Kaitiakitanga-License/blob/tumu/papareo_api.md), Specifically, from Clause 3:
 
-Keeping the data from a determined adversary or a malicious tool is out of scope.
+> You must not send model outputs to third party services that may collect and use them.
+
+To allow agents to use that API and still comply with the license, we use oven-mitt. Data goes straight from the tool use into the vault. The agent can then move the data around but it is prevented from entering into the LLM's context. Agents are stochastic and therefore unreliable. This tools makes it very hard for them to accidentally load into their context. Combined with appropriate agent tooling (see upcoming changes in https://github.com/cyborg-garden/swarm-map) the agent can use a tool to create data and send it to the human while keeping the data encrypted and **inaccessible to the agent**.
+
+**The promise of oven-mitt is, however, limited.** For instance, a human user - including ones with appropriate rights to the data - can defeat the LLM protections by simple 'copy and paste' from their received file into a chat session. This tool is focused on keeping the agent honest (even if it has a brain fart and decides to get 'creative'). It makes it possible for an agent to reliably - and in an auditable fashion - manipulate data without ever loading it into context. The threat which it manages against is primarily accidental leakage: an agent hallucination, careless tool code, or a misconfiguration that might lead to data accidentally entering the context. We prevent that. **Keeping the data from a determined adversary, from a malicious tool or from the human that has a right to that data, is out of scope.** 
 
 Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, operator CLI. See [`PRD.md`](PRD.md) for the full specification and [`BRIEF.md`](BRIEF.md) for the design history and the motivating case.
 
