@@ -4,6 +4,9 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 
 ## [Unreleased]
 
+### Fixed
+- Python test fixture put the daemon socket under pytest's `tmp_path`, which on macOS exceeds the 104-byte Unix socket path limit; the socket now lives in a short `/tmp` dir and the fixture reports the daemon's stderr if it dies. The daemon itself now names the platform limit instead of surfacing a bare ENAMETOOLONG.
+
 ### Added
 - M9: README (what it is, how it works, quick start, operator guide and checklist, tool-author guide, the PRD §11 limitations verbatim), Python README.
 - M8: reference `docker-compose.yml` (daemon + agent; the agent mounts only the socket volume), test overlay with a sleeping `test-agent`, agent image, end-to-end suite driving compose from the host (AT-8, AT-11 via `docker exec`, AT-13 across containers, AT-20, brief §9 end to end), repo-wide domain-name denylist test (AT-28).

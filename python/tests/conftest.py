@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import os
 import secrets
+import shutil
 import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -30,7 +32,11 @@ def _binary() -> Path:
 class Daemon:
     def __init__(self, tmp: Path) -> None:
         self.tmp = tmp
-        self.socket = tmp / "sock" / "ovenmitt.sock"
+        # Unix socket paths are capped at 104 bytes on macOS (108 on Linux);
+        # pytest's tmp_path is longer than that on macOS, so the socket gets
+        # its own short directory under /tmp.
+        self.sock_dir = Path(tempfile.mkdtemp(prefix="ovm-", dir="/tmp"))
+        self.socket = self.sock_dir / "s.sock"
         self.export_root = tmp / "export"
         self.export_root.mkdir()
         self.credentials = tmp / "credentials.toml"
@@ -69,9 +75,14 @@ expose_names = false
         for _ in range(200):
             if self.socket.exists():
                 break
+            if self.proc.poll() is not None:
+                err = self.proc.stderr.read().decode() if self.proc.stderr else ""
+                raise RuntimeError(f"daemon exited with {self.proc.returncode}:\n{err}")
             time.sleep(0.02)
         else:
-            raise RuntimeError("daemon did not start")
+            self.proc.kill()
+            err = self.proc.stderr.read().decode() if self.proc.stderr else ""
+            raise RuntimeError(f"daemon did not start within 4s:\n{err}")
 
     def cli(self, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
@@ -98,6 +109,7 @@ expose_names = false
             self.proc.wait(timeout=10)
         except subprocess.TimeoutExpired:
             self.proc.kill()
+        shutil.rmtree(self.sock_dir, ignore_errors=True)
 
 
 @pytest.fixture

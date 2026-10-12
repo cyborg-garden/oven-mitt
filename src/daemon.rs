@@ -128,6 +128,18 @@ fn bind_socket(config: &Config) -> Result<StdUnixListener, StartError> {
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(io(e)),
     }
+    // sun_path is 104 bytes on macOS and 108 on Linux; say so rather than
+    // leaving the operator to decode ENAMETOOLONG.
+    let limit = if cfg!(target_os = "macos") { 104 } else { 108 };
+    if path.as_os_str().len() >= limit {
+        return Err(io(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            format!(
+                "socket path is {} bytes; Unix socket paths must be shorter than {limit} bytes on this platform",
+                path.as_os_str().len()
+            ),
+        )));
+    }
     let listener = StdUnixListener::bind(path).map_err(io)?;
     listener.set_nonblocking(true).map_err(io)?;
     #[cfg(unix)]
