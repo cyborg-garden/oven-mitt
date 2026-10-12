@@ -1,0 +1,38 @@
+name: ci
+on:
+  push:
+    branches: [tumu]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --all-targets
+      # the example config's fs root must exist for the check to pass
+      - run: sudo mkdir -p /var/lib/ovenmitt/export/archive
+      - run: cargo run -- config check docker/example/ovenmitt.toml
+
+  python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --project python --all-extras
+      - run: uv run --project python pytest python/tests -q
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f docker/Dockerfile -t ovenmitt:ci .
+      - run: docker run --rm ovenmitt:ci --version
+      - run: docker run --rm ovenmitt:ci config check

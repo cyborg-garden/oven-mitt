@@ -1,0 +1,7 @@
+/target
+/python/.venv
+/python/dist
+/python/**/__pycache__
+/python/.pytest_cache
+*.pyc
+/tests-e2e/.pytest_cache

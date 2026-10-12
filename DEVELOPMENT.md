@@ -22,9 +22,9 @@ The security boundary is the daemon's socket handling (PRD §2). Nothing in the 
 
 ```
 oven-mitt/
-├── Cargo.toml                 crate `ovenmitt`, edition 2024, one [[bin]]
-├── rust-toolchain.toml        pins the toolchain (1.99)
+├── Cargo.toml                 crate `ovenmitt`, edition 2024, `rust-version = "1.97"`
 ├── src/
+│   ├── lib.rs                 module list; the bin and `tests/` both use the library
 │   ├── main.rs                clap dispatch only
 │   ├── daemon.rs              startup sequence (§5), serve loop
 │   ├── config.rs              TOML schema, validation (R-DEP-6), duration/size grammars
@@ -91,7 +91,9 @@ oven-mitt/
 └── .github/workflows/ci.yml   fmt, clippy -D warnings, cargo test, python tests, image build
 ```
 
-Not a Cargo workspace: one crate is enough and a workspace adds ceremony with no second crate to justify it. Split if a second binary or a shared library ever appears.
+Not a Cargo workspace: one crate is enough and a workspace adds ceremony with no second crate to justify it. Split if a second binary ever appears. The crate has a library target plus the one binary, so integration tests in `tests/` can call modules directly and the binary stays a dispatcher.
+
+No `rust-toolchain.toml`: the cloud shell where day-to-day builds happen has 1.97 and can't download toolchains, so `rust-version = "1.97"` is the floor and anything newer (your Mac has 1.99) is fine. Pin a toolchain file when CI needs reproducibility badly enough to pay for it.
 
 ---
 

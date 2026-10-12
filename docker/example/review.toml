@@ -1,0 +1,24 @@
+# ovenmitt — review rules (optional; these are the built-in defaults).
+# Severities: low < medium < high < critical.
+
+threshold = "medium"           # exit 1 at or above this; --threshold overrides
+
+[rules.refusal]                # every audit entry with outcome = refused
+severity = "high"
+
+[rules.first_destination]      # first ever ok export/resolve to a (vault, destination)
+severity = "medium"
+
+[rules.burst]                  # >= count ok events of one kind within a sliding window
+severity = "medium"
+events   = ["resolve", "export", "delete"]
+count    = 20
+window   = "10m"
+
+[rules.churn]                  # >= count replace/label/delete on one handle within window
+severity = "low"
+count    = 10
+window   = "1h"
+
+[rules.chain]                  # verify failure; cannot be lowered below "high"
+severity = "critical"

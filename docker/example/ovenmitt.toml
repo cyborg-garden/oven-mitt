@@ -1,0 +1,40 @@
+# ovenmitt — example operator configuration.
+#
+# This file is the operator's authority. It is mounted read-only into the
+# daemon container and nothing on the socket can read or change it.
+# Every destination must be declared here; the default is deny.
+# Platform names are fine in your own values (match patterns, roots); they
+# never appear in ovenmitt's code, keys or defaults.
+
+[daemon]
+socket             = "/run/ovenmitt/ovenmitt.sock"
+socket_mode        = "0666"
+data_dir           = "/var/lib/ovenmitt/data"
+keys_dir           = "/var/lib/ovenmitt/keys"
+audit_log          = "/var/lib/ovenmitt/audit/audit.jsonl"
+credentials        = "/var/lib/ovenmitt/credentials.toml"
+ttl_sweep_interval = "5m"
+
+[vault.private]
+expose_names    = false   # governs all objects in the vault, past and future
+ttl             = "30d"   # optional; <int><s|m|h|d>
+max_object_size = "2GiB"  # optional; <int><B|KiB|MiB|GiB>
+
+# An export root. Plaintext is written here by `export`. Never mount this
+# directory into the agent container: that would be a read path.
+[vault.private.destinations.archive]
+kind      = "fs"
+root      = "/var/lib/ovenmitt/export/archive"
+overwrite = false
+
+# A send destination. `match` is a literal, optionally ending in `/*` for
+# exactly one more segment. Consumer tool code must name this destination
+# and a concrete target that matches when it resolves bytes.
+[vault.private.destinations.team-chat]
+kind  = "send"
+match = "chat:group/team"
+
+[vault.private.destinations.any-dm]
+kind     = "send"
+match    = "chat:dm/*"
+max_size = "8MiB"

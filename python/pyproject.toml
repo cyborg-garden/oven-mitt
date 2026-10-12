@@ -1,0 +1,27 @@
+[project]
+name = "ovenmitt"
+version = "0.1.0"
+description = "Client library and MCP server for the ovenmitt write-only vault daemon."
+readme = "README.md"
+license = "AGPL-3.0-only"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx>=0.28",
+    "mcp>=1.2",
+]
+
+[project.scripts]
+ovenmitt = "ovenmitt.cli:main"
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.24"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ovenmitt"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
