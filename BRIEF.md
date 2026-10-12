@@ -17,11 +17,11 @@ Today, any tool output an agent produces lands in a tool result, and therefore i
 
 ## 2. What it is
 
-A generic, Unix-shaped **write-only sink**. Data goes in, and an opaque handle comes out. The agent can then label, export, send or pipe that data by handle, and **nothing in the agent's reach can read it back**.
+A generic, Unix-shaped **write-only sink**. Data goes in, and an opaque handle comes out. The agent can then label, export or send that data by handle, and **nothing in the agent's reach can read it back**.
 
-```
-some-tool --args | vput --vault private
-→ v_9c1e4a  2.1MB  text/plain
+```python
+h = vault.put(stream_from_some_tool(), vault="private")
+# → v_9c1e4a  2.1MB  text/plain
 ```
 
 ## 3. Threat model
@@ -42,20 +42,18 @@ some-tool --args | vput --vault private
 
 ### 5.1 Daemon and faces
 
-One Rust daemon, three faces, all over a local Unix socket:
+One Rust daemon in its own Docker container. In v1 it has two faces for agents and tools, both thin clients over a Unix socket shared into the agent's container:
 
 | Face | For | Notes |
 |---|---|---|
-| `vput` / `vpipe` / `vault` CLI | agents, scripts, pipes | Unix utility; the pipe target |
-| `vault mcp` | LLM tool calls | same operations as CLI |
-| Python client lib | tool authors | the **only** path that resolves bytes, and only with a consumer credential |
+| Python client lib | tool authors | `put` from a stream; the **only** path that resolves bytes, and only with a consumer credential |
+| `vault mcp` | LLM tool calls | runs beside the agent, so `put` can take an agent-side path |
+
+There is also an **operator-only admin CLI** inside the daemon's container, for `vault audit verify` and `vault audit review`, run with `docker exec`. It isn't reachable from the agent's container.
 
 **No read command exists on any face.** Resolving a handle to bytes is a library call (`resolve(handle, destination) → stream`) for tool code.
 
-**Deployment modes** (encrypted at rest in both: AES-256-GCM, one key per vault, held only by the daemon):
-- **Sidecar (default):** Docker. The vault volume and keys live in the daemon container only, and the agent container reaches it over a socket.
-- **Local:** a single binary running as a dedicated OS user (`vaultd`), store and keys at mode 0700, clients authenticated by peer UID (`SO_PEERCRED`). No Docker, still structural.
-- **`--dev`:** the daemon runs as the agent's own user. Loud warning at startup, recorded in the audit log, and flagged by `review` at the highest severity.
+**Deployment (v1 is Docker only):** the vault volume and keys live in the daemon container only. Objects are encrypted at rest (AES-256-GCM, one key per vault, held only by the daemon). The agent container sees only the socket, so `cat` on the store is impossible: the files aren't in its filesystem.
 
 Losing a vault key means losing the vault. The docs say so.
 
@@ -63,17 +61,16 @@ Losing a vault key means losing the vault. The docs say so.
 
 | Operation | Effect |
 |---|---|
-| `put [<path> \| -]` | one verb, Unix-style. With no argument or `-` it reads stdin; with a path it reads that file. Either way → handle. `--remove-source` deletes the original after a successful commit. (The CLI client reads the path and streams it, so this works in sidecar mode where the daemon can't see agent paths.) |
-| `put --replace <h> [<path> \| -]` | stream a new body under the same handle; old bytes deleted |
+| `put(stream \| path)` | stream in → handle. The library takes a stream; the MCP face takes a path, which the client reads and streams, since the daemon can't see agent paths. `remove_source` deletes the original after a successful commit |
+| `put(…, replace=<h>)` | stream a new body under the same handle; old bytes deleted |
 | `export <h> <destination> <filename>` | write to a declared destination. The agent picks the filename: sanitised, confined to the destination root, error on collision unless `overwrite: true` |
 | `stat`, `list`, `label`, `delete` | metadata only |
 | `list-destinations <vault>` | names only |
-| `vpipe <h> --into <vault> -- cmd args` | run an allowlisted command with bytes on stdin. **stdout is captured into a vault as a new handle**; stderr is reduced to an exit code. Off unless enabled per vault |
 | `resolve(h, destination)` *(lib only)* | stream bytes to tool code holding a consumer credential. Declared destination checked against the vault allowlist; every call audited |
 
 On the MCP face, `put` takes a path only. The LLM has no stdin to give, and it must never be able to send content itself.
 
-Not in v1: content search (a v2 candidate, §10.2), filter, preview, concat or transforms (beyond `vpipe`), partial edits, version retention.
+Not in v1: the agent-facing CLI and `vpipe` (§10.2), content search (§10.2), filter, preview, concat or transforms, partial edits, version retention.
 
 ## 7. Per-vault configuration (operator-only)
 
@@ -83,7 +80,6 @@ Sketch only; the PRD fixes the schema.
 [vault.private]
 expose_names  = false
 ttl           = "30d"             # optional
-vpipe_allow   = ["pandoc", "iconv"]
 
 [vault.private.destinations]
 nas-archive  = { kind = "fs",   root = "/srv/nas/archive" }
@@ -98,7 +94,7 @@ Every destination, whether export, send or message-body, must be declared here. 
 The audit trail is first-class: it is how we stay confident the boundary holds.
 
 - **Append-only, hash-chained JSONL** in the daemon, operator-only, never exposed to the agent.
-- **Events:** put, replace, delete, export, resolve, vpipe, TTL expiry, and **every refusal** of any kind.
+- **Events:** put, replace, delete, export, resolve, TTL expiry, and **every refusal** of any kind.
 - **Fields:** timestamp, vault, handle, version hash, destination *name*, caller (peer UID or credential id), outcome, previous-entry hash.
 - **Never logged:** content, real filenames (unless `expose_names`), resolved paths or URLs.
 - `vault audit verify` checks the chain. Anchoring the head hash off-host is a documented manual step in v1, automated later.
@@ -107,22 +103,21 @@ The audit trail is first-class: it is how we stay confident the boundary holds.
   - first-time destinations
   - bursts of resolves, exports or deletes
   - churn on a single handle
-  - `--dev` mode
   - chain failure
 
   It is **cron-friendly**: findings go to stderr and it exits nonzero at or above the threshold, so cron mail or any monitor picks it up.
 
 ## 9. Core acceptance test (no harness)
 
-1. `some-tool | vput --vault private` returns a handle plus metadata only.
+1. `put` through the library and through MCP each return a handle plus metadata only.
 2. A test consumer holding a credential resolves the handle against a declared send pattern and receives the bytes intact.
 3. Each of these fails safely and is audited:
-   - there is no read command on the CLI or MCP faces
-   - `cat` on the store: permission denied (sidecar and local modes)
+   - there is no read command on the library or MCP faces
+   - the store is not in the agent container's filesystem at all
    - `resolve` without a credential: refused
    - `resolve` to an undeclared destination: refused
    - export outside the destination root (`../`): refused
-4. `vault audit verify` passes, and `vault audit review` reports every refusal and exits nonzero.
+4. `vault audit verify` (admin CLI) passes, and `vault audit review` reports every refusal and exits nonzero.
 
 The end-to-end test with a real agent is in Part B (§B4).
 
@@ -130,11 +125,15 @@ The end-to-end test with a real agent is in Part B (§B4).
 
 ### 10.1 v1
 
-Rust daemon and CLI, MCP face, Python client, Docker compose plus local mode. Together with the Part B PR, this makes the v1 deliverable.
+Docker only. Rust daemon, Python client library, MCP face, operator admin CLI (audit `verify` and `review`), and a compose file. Together with the Part B PR, this makes the v1 deliverable.
 
-### 10.2 Version 2: possible features
+### 10.2 Future: possible features
 
 None of these is needed to start. Each is recorded so v1 doesn't rule it out.
+
+- **Agent-facing CLI (`vput`):** a Unix utility so any shell tool can pipe straight into a vault (`some-tool | vput --vault private`). The core use beyond agents.
+- **`vpipe`:** run an allowlisted command with bytes on stdin, with stdout captured into a vault as a new handle and stderr reduced to an exit code. Off unless enabled per vault.
+- **Local (non-Docker) mode:** the daemon runs as a dedicated OS user (`vaultd`), with the store and keys at mode 0700 and clients authenticated by peer UID (`SO_PEERCRED`). A same-user `--dev` mode only with loud warnings, and flagged by `review`.
 
 - **Search:** finding the relevant file when there are many. Any content search is partly a read path: every query reveals whether its terms appear. So results must be handles and labels only, never snippets, and queries need a credential and are audited and rate-limited. Search over labels and metadata alone is safer and may be enough.
 - **Content check:** "does this text contain vault content?" The daemon would keep keyed content fingerprints of every object: overlapping word windows (e.g. 8 words), each hashed with a secret key only the daemon holds. `check(text)` would return match or no match plus matching handles, never content. Callers would live outside the core: a harness scrubber (§B7), an LLM proxy, a log or email filter, a git pre-commit hook. Caveats:
@@ -156,24 +155,24 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 2 | Unit of protection: path-rooted vaults |
 | 3 | Opaque handles by default; per-vault `expose_names`; size/type/mtime/labels visible |
 | 4 | Harness-independent core in this repo; harness-specific integration lives elsewhere (Part B) |
-| 5 | Sidecar (Docker) or dedicated-OS-user local mode; same-user only as `--dev` |
+| 5 | v1 is Docker only; local mode is future |
 | 6 | Core primitive is the generic write-only sink; sealed producers layer on top later |
 | 7 | Sends use the harness's existing surfaces and identity, resolving by handle in tool code |
 | 8 | No read command; resolve is lib-only and needs a consumer credential |
-| 9 | Three faces (CLI, MCP, Python lib) over one daemon |
+| 9 | v1 faces: Python lib and MCP, plus an operator-only admin CLI in the daemon container; agent-facing CLI is future |
 | 10 | Stable handles, whole-object atomic replace, old bytes deleted immediately |
 | 11 | `export(handle, destination, filename)`; destinations named, declared per vault, operator-only |
 | 12 | Every resolve declares a destination, checked against the per-vault allowlist |
-| 13 | Message-body sends are a destination type; `vpipe` captures stdout into a vault, allowlisted, off by default |
-| 14 | Encrypted at rest in all modes |
+| 13 | Message-body sends are a destination type; `vpipe` is future |
+| 14 | Encrypted at rest |
 | 15 | Hash-chained audit log, `verify`, and rule-based cron-friendly `review` |
-| 16 | No content check, search or LLM proxy in v1; they are v2 candidates (§10.2) |
+| 16 | No content check, search or LLM proxy in v1; they are future candidates (§10.2) |
 | 17 | Rust core, Python client, AGPL-3.0 (matches Swarm Map) |
 | 18 | Optional per-vault TTL, unset by default |
 | 19 | Name: `llm-safe-kaitiaki` |
-| 20 | No policy modes. Every behaviour is set by explicit per-vault config; `--dev` is daemon-wide, audited and flagged |
+| 20 | No policy modes. Every behaviour is set by explicit per-vault config |
 | 21 | No domain-specific names (licences, providers, communities, platforms) in core code, config keys or defaults |
-| 22 | One `put` verb: stdin by default or `-`, a file path otherwise; `--remove-source`, `--replace`. No separate import |
+| 22 | One `put` operation: a stream (library) or a path (MCP); `remove_source`, `replace`. No separate import |
 
 # Part B — Harness integration (separate PR to Swarm Map)
 
@@ -183,10 +182,10 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 
 All Hermes-specific code is packaged as one Hermes plugin (a Python folder with `register(ctx)`), plus deployment wiring:
 
-1. **Producer tool(s):** e.g. the Papa Reo API call, piping its output straight into `vput`.
+1. **Producer tool(s):** e.g. the Papa Reo API call, streaming its response straight into `vault.put()` through the library. The agent calls the tool and gets back only a handle.
 2. **`vault_send(handle)`:** sends a vault object to the current chat (see B3).
 3. **Consumer credential:** given only to `vault_send`. It is never in the terminal tool's environment or on PATH.
-4. **Wiring:** the daemon as a compose service; `vault_send` gets the consumer credential.
+4. **Wiring:** the daemon as a compose service, with its socket shared into the agent container; `vault_send` gets the consumer credential.
 
 Later Swarm Map work: a vault/destination config API behind its UI, and an audit view with `review` findings on the dashboard. Deferred: inbound attachment diversion (chat uploads → vault, bypassing the agent).
 
@@ -209,11 +208,11 @@ Later Swarm Map work: a vault/destination config API behind its UI, and an audit
 Reference producer: a Papa Reo API call (Part C). Any tool whose output must stay out of context works the same way.
 
 1. The user asks the agent on Signal for something whose output must be protected.
-2. The agent runs `some-tool | vput --vault private` and receives a handle plus metadata only.
+2. The agent calls the producer tool and receives a handle plus metadata only.
 3. The agent calls `vault_send(handle)`, and the user receives the file as a Signal attachment.
 4. Each leak attempt fails safely:
    - "read it back": there is no read path
-   - `cat` on the store: permission denied
+   - `cat` on the store: not in the agent's filesystem
    - export to an undeclared destination: refused and audited
 5. `vault audit verify` passes, and `vault audit review` reports the refusals.
 6. A capture of every LLM request in the session contains **zero** protected content.
@@ -230,7 +229,7 @@ Reference producer: a Papa Reo API call (Part C). Any tool whose output must sta
 | B1 | All Hermes-specific code (producers, `vault_send`, wiring) ships as one Swarm Map PR |
 | B2 | Signal sends use signal-cli data-URI attachments; no temp files |
 
-## B7. Version 2: possible additions
+## B7. Future: possible additions
 
 - **Tool-result scrubber:** a `transform_tool_result` hook that calls the core `check` (§10.2) on every tool result and replaces any match with `[redacted: vault content]`. Tool output is the main way content enters context, and this hook can rewrite it.
 - **LLM proxy:** Hermes's base URL pointed at a proxy that calls `check` on every outgoing request and refuses on a match. It's the only way to block a whole request, since no Hermes hook can.
