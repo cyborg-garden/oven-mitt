@@ -262,6 +262,7 @@ CI runs the first three on every push and the fourth on a manual trigger and on 
 | D-6 | `mime` is duplicated in cleartext `meta.json`. | `list` must not decrypt; `mime` is agent-visible anyway. |
 | D-7 | Python ≥ 3.11. | `tomllib`, modern typing; nothing older is worth supporting for a new package. |
 | D-8 | Daemon image built per-architecture inside Docker, never cross-compiled from the Mac. | The binary that runs in the container is built for the container. |
+| D-10 | An unreadable or corrupt object record, or an object whose vault is no longer in the config, refuses startup. | Same posture as a missing key: a daemon that silently skips an object it can't account for is a daemon whose `list` lies. The message names the directory so the operator can move it aside. |
 | D-9 | Work lands on `tumu` in small commits; a feature branch + PR only when a milestone touches more than one layer at once. | Solo project; PR ceremony for every commit slows it down without catching anything a test run doesn't. Change this if a second contributor appears. |
 
 ---
