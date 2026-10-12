@@ -21,14 +21,14 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 ## How it works
 
 ```
-┌──────────────── agent container ──────────────-──┐        ┌──────── daemon container ────────┐
-│  LLM ⇄ harness ⇄ MCP server.                     │        │                                  │
-│                 tool code  ──-─▶ /run/ovenmitt/ovenmitt.sock ─▶ ovenmittd                    │
-│                                                  │        │   ├─ data/   ciphertext only     │
-│                                                  │        │   ├─ keys/   never leaves        │
-└───────────────────────────────-──────────────────┘        │   ├─ audit/  hash-chained JSONL  │
-                                                            │   └─ export                    ──-─▶ allowed export paths 
-                                                            └──────────────────────────────────┘
+┌──────────────── agent container ──────────-──┐         ┌──────── daemon container ────────┐
+│  LLM ⇄ harness ⇄ MCP server.                 │         │                                  │
+│            tool code  ──-─▶ /run/ovenmitt/ovenmitt.sock ─▶ ovenmittd                      │
+│                                              │         │   ├─ data/   ciphertext only     │
+│                                              │         │   ├─ keys/   never leaves        │
+└───────────────────────────-──────────────────┘         │   ├─ audit/  hash-chained JSONL  |
+                                                         │   └─ export                    ──-─▶ allowed export paths 
+                                                         └──────────────────────────────────┘
 ```
 
 - **Vault** — a named store declared by the operator. Objects are encrypted at rest with a per-object key wrapped by a per-vault key; the daemon never writes plaintext to its own disk.
