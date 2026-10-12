@@ -24,7 +24,7 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 ```
 
 - **Vault** — a named store declared by the operator. Objects are encrypted at rest with a per-object key wrapped by a per-vault key; the daemon never writes plaintext to its own disk.
-- **Handle** — `v_9c1e4a0b2d31`. Stable, opaque, not a secret. Size, MIME type, timestamps and labels are visible to the agent; the original filename only if the vault says so.
+- **Handle** — `v_9c1e4a0b2d31`. Stable, opaque, not a secret. Size, MIME type, timestamps and labels are visible to the agent; the original filename only if the cpnfiguration allows.
 - **Destination** — a *named* target the operator declares per vault: an `fs` root (for `export`) or a `send` pattern (for `resolve`). The default is deny. The agent sees names, never roots or patterns.
 - **Consumer credential** — a token the operator issues to specific tool code. It is the only way to get bytes out through the socket, and the deployer keeps it away from the agent's terminal.
 - **Audit log** — append-only, hash-chained. Every put, replace, delete, export, resolve, expiry and **every refusal** is recorded, with the resolve target. `ovenmitt audit review` flags refusals, first-time destinations, bursts, churn and chain breaks, and exits nonzero for cron.
