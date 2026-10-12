@@ -123,7 +123,15 @@ fn main() -> ExitCode {
             command: ConfigCommand::Check { path },
         } => cli::config::check(&path.unwrap_or(cli.config)),
         Command::Daemon => not_yet("daemon", "M4"),
-        Command::Audit { .. } => not_yet("audit", "M3/M6"),
+        Command::Audit {
+            command: AuditCommand::Verify,
+        } => cli::audit::verify(&cli.config),
+        Command::Audit {
+            command: AuditCommand::Head,
+        } => cli::audit::head(&cli.config),
+        Command::Audit {
+            command: AuditCommand::Review { .. },
+        } => not_yet("audit review", "M6"),
         Command::Credential { .. } => not_yet("credential", "M5"),
         Command::Vault { .. } => not_yet("vault", "M6"),
         Command::Object { .. } => not_yet("object", "M6"),
