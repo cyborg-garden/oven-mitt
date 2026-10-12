@@ -1,0 +1,21 @@
+# Overlay for the e2e suite (tests-e2e/). Adds a test agent that just
+# sleeps so tests can `exec` into it, and swaps in a generated config whose
+# export roots and send patterns carry sentinel markers.
+#
+#   docker compose -f docker/docker-compose.yml -f docker/docker-compose.test.yml up -d --build
+
+services:
+  ovenmittd:
+    volumes:
+      - ./test/generated/ovenmitt.toml:/etc/ovenmitt/ovenmitt.toml:ro
+
+  test-agent:
+    image: ovenmitt-agent:latest
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    depends_on:
+      - ovenmittd
+    volumes:
+      - ovenmitt-sock:/run/ovenmitt
+    command: ["sleep", "infinity"]

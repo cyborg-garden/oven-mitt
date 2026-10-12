@@ -12,7 +12,7 @@ socket_mode        = "0666"
 data_dir           = "/var/lib/ovenmitt/data"
 keys_dir           = "/var/lib/ovenmitt/keys"
 audit_log          = "/var/lib/ovenmitt/audit/audit.jsonl"
-credentials        = "/var/lib/ovenmitt/credentials.toml"
+credentials        = "/var/lib/ovenmitt/data/credentials.toml"   # inside the data volume
 ttl_sweep_interval = "5m"
 
 [vault.private]

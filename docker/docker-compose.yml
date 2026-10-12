@@ -1,0 +1,43 @@
+# ovenmitt reference deployment (PRD R-DEP-1..4).
+#
+#   docker compose -f docker/docker-compose.yml up -d --build
+#   docker compose -f docker/docker-compose.yml exec ovenmittd ovenmitt audit review
+#
+# The agent service sees ONE thing: the socket volume. Never mount
+# ovenmitt-data, ovenmitt-keys, ovenmitt-audit, the config, or any export
+# root into it — any of those is a read path (PRD §11).
+
+services:
+  ovenmittd:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    image: ovenmitt:latest
+    restart: unless-stopped
+    volumes:
+      - ovenmitt-data:/var/lib/ovenmitt/data
+      - ovenmitt-keys:/var/lib/ovenmitt/keys
+      - ovenmitt-audit:/var/lib/ovenmitt/audit
+      - ovenmitt-export:/var/lib/ovenmitt/export
+      - ovenmitt-sock:/run/ovenmitt
+      - ./example/ovenmitt.toml:/etc/ovenmitt/ovenmitt.toml:ro
+    # No ports. The daemon has no TCP listener and never will (R-DEP-3).
+
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    image: ovenmitt-agent:latest
+    depends_on:
+      - ovenmittd
+    volumes:
+      - ovenmitt-sock:/run/ovenmitt
+    stdin_open: true
+    tty: false
+
+volumes:
+  ovenmitt-data:
+  ovenmitt-keys:     # back this up separately from ovenmitt-data (PRD §11)
+  ovenmitt-audit:
+  ovenmitt-export:
+  ovenmitt-sock:

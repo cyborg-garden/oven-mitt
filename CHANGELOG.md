@@ -5,6 +5,7 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 ## [Unreleased]
 
 ### Added
+- M8: reference `docker-compose.yml` (daemon + agent; the agent mounts only the socket volume), test overlay with a sleeping `test-agent`, agent image, end-to-end suite driving compose from the host (AT-8, AT-11 via `docker exec`, AT-13 across containers, AT-20, brief §9 end to end), repo-wide domain-name denylist test (AT-28).
 - M7: Python package `ovenmitt` — `VaultClient` (every endpoint, streaming put from bytes/file/iterator, `put_path` with client-side hash and unlink-after-2xx, `resolve` returning a stream), `ovenmitt mcp` serving the closed eight-tool set over stdio, tests against the real daemon (AT-2, AT-29, SI-13, parity).
 - M6: `ovenmitt audit review` — rules file with defaults (refusal, first_destination, burst, churn, chain), `--since`, `--threshold`, `--json`, findings on stderr ranked by severity, exit 0/1/2; `ovenmitt vault list`; `ovenmitt object stat` reading one object straight from disk beside a live daemon (R-REV-1..4, R-VLT-4, R-OBJ-11; AT-11, AT-24, AT-29).
 - M5: consumer credentials (`ovm_<id>_<secret>`, hashed on disk, vault-scoped, re-read on change so revoke needs no restart) and `POST /v1/objects/{handle}/resolve` — the one route that returns bytes — with the R-RES-2 check order; `ovenmitt credential issue|list|revoke` (R-CRD-1..4, R-RES-1..5; AT-4, AT-5 full table, AT-17; SI-1, SI-5, SI-14).
