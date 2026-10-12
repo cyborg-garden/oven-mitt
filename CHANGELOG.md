@@ -5,6 +5,7 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 ## [Unreleased]
 
 ### Added
+- M9: README (what it is, how it works, quick start, operator guide and checklist, tool-author guide, the PRD §11 limitations verbatim), Python README.
 - M8: reference `docker-compose.yml` (daemon + agent; the agent mounts only the socket volume), test overlay with a sleeping `test-agent`, agent image, end-to-end suite driving compose from the host (AT-8, AT-11 via `docker exec`, AT-13 across containers, AT-20, brief §9 end to end), repo-wide domain-name denylist test (AT-28).
 - M7: Python package `ovenmitt` — `VaultClient` (every endpoint, streaming put from bytes/file/iterator, `put_path` with client-side hash and unlink-after-2xx, `resolve` returning a stream), `ovenmitt mcp` serving the closed eight-tool set over stdio, tests against the real daemon (AT-2, AT-29, SI-13, parity).
 - M6: `ovenmitt audit review` — rules file with defaults (refusal, first_destination, burst, churn, chain), `--since`, `--threshold`, `--json`, findings on stderr ranked by severity, exit 0/1/2; `ovenmitt vault list`; `ovenmitt object stat` reading one object straight from disk beside a live daemon (R-REV-1..4, R-VLT-4, R-OBJ-11; AT-11, AT-24, AT-29).

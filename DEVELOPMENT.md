@@ -285,7 +285,7 @@ Each milestone's "done" is a list of tests passing on the Mac. Order is dependen
 | **M6** | Review: rules, output, exit codes; `ovenmitt audit review`; `vault list`, `object stat`. | AT-11 (in-process), AT-24. |
 | **M7** | Python client + MCP server + `ovenmitt mcp`. | Python tests: AT-2, AT-29, SI-13 tool-list test, parity test for every endpoint. |
 | **M8** | Compose (reference + test), agent image, e2e suite. | AT-8, 11 (via `docker exec`), 13, 20, 28 on the Mac. **This is the v1 acceptance gate** — brief §9 maps to AT-1/2, 4, 5–9, 11. |
-| **M9** | Docs: README with PRD §11 verbatim, operator checklist, tool-author guide, threat model in the "hard, not impossible" framing; `CHANGELOG`; tag `v0.1.0`. | A reviewer can deploy from the README alone; every R-DOC item has a section. |
+| **M9** | Docs: README with PRD §11 verbatim, operator checklist, tool-author guide, threat model in the "hard, not impossible" framing; `CHANGELOG`; tag `v0.1.0`. | A reviewer can deploy from the README alone; every R-DOC item has a section. **Tag only after the M8 gate passes on the Mac.** |
 
 Rough shape of effort: M0–M3 are where Rust is learned; expect them to be slow and the rest fast. M4 is the largest single milestone. M8 is where surprises live (socket permissions across containers, arm64/amd64).
 
