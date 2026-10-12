@@ -1,6 +1,6 @@
 # ovenmitt — BRIEF
 
-*Status: brief. Decisions captured from design interview, 2026-10-12; updated the same day after PRD review (decisions 23–34). Project name is `ovenmitt`; the repo is `llm-safe-kaitiaki` until renamed.*
+*Status: brief. Decisions captured from design interview, 2026-10-12; updated the same day after PRD review (decisions 23–34). Project name is `ovenmitt`; the repo is `github.com/utunga/oven-mitt`. The hyphen is for the repo only: binary, daemon, Python package and PyPI name are `ovenmitt`, since a hyphen can't appear in an import or a sensible binary name (cf. `scikit-learn` / `sklearn`).*
 
 *The one-line design criterion: make it **hard** for an agent to accidentally send protected data through its context, not impossible. Simple, elegant, free of foot-guns.*
 
@@ -153,7 +153,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 
 ## 11. Open items
 
-- Rename the repo to `ovenmitt` (and check crates.io / GitHub for the name; PyPI is free).
+- None at present. (Repo renamed to `utunga/oven-mitt`; `ovenmitt` confirmed free on crates.io and PyPI.)
 
 ## 12. Decisions log
 
@@ -177,7 +177,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 16 | No content check, search or LLM proxy in v1; they are future candidates (§10.2) |
 | 17 | Rust core, Python client, AGPL-3.0 (matches Swarm Map) |
 | 18 | Optional per-vault TTL, unset by default |
-| 19 | Name: `ovenmitt` (binary `ovenmitt`, daemon `ovenmittd`, Python package `ovenmitt`; MCP tools `vault_*`). Was `llm-safe-kaitiaki` |
+| 19 | Name: `ovenmitt` (binary `ovenmitt`, daemon `ovenmittd`, Python package `ovenmitt`; MCP tools `vault_*`); repo `utunga/oven-mitt`. Was `llm-safe-kaitiaki` |
 | 20 | No policy modes. Every behaviour is set by explicit per-vault config |
 | 21 | No domain-specific names (licences, providers, communities, platforms) in core code, config keys, defaults or shipped examples. Operator config values are unrestricted |
 | 22 | One `put` operation: a stream (library) or a path (MCP); `remove_source`, `replace`. No separate import |

@@ -1,8 +1,8 @@
 # ovenmitt — PRD (Part A, core, v1)
 
-*Project name: **ovenmitt** — handle the hot thing without touching it. Repo currently `llm-safe-kaitiaki`; renaming the repo is a separate decision.*
+*Project name: **ovenmitt** — handle the hot thing without touching it. Repo: `github.com/utunga/oven-mitt`. The hyphen is the repo's only; binary, daemon, package and PyPI name are `ovenmitt`.*
 
-*Status: draft 0.3, 2026-10-12. Derived from BRIEF.md (decisions 1–22), reconciled against the independent second review (`PRD-hermes_digicryptids.md`, Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
+*Status: draft 0.4, 2026-10-12. Derived from BRIEF.md (decisions 1–22), reconciled against the independent second review (`PRD-hermes_digicryptids.md`, Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
 
 **How to read this.** Requirements carry IDs (`R-xxx-n`), security invariants carry `SI-n`, tests carry `AT-n`. MUST/SHOULD/MAY are RFC 2119. §0 lists every point where the brief was silent or inconsistent and records how it was decided; nothing below is a silent assumption.
 
@@ -32,7 +32,7 @@ The **2nd** column marks items the second, independent review also raised (its `
 | F-14 | AMB-12 | §4 labels | Agent-visible, agent-settable; a producer that labels with content leaks. | Default. ≤ 256 bytes, ≤ 16 per object; tool-author warning; label text never logged. |
 | F-15 | — | §4 `expose_names` | Store-but-hide or discard the original name? The operator may need names to find something for a human. | **Decided.** Always stored (encrypted). Agent sees it iff the vault's `expose_names` is `true` now. Operator always sees it via `ovenmitt object stat`. The setting governs all objects in the vault, past and future; one doc line says so. No per-object state. |
 | F-16 | — | §5.1, §7 | An `fs` root also mounted into the agent container is a read path. | **Decided** (with F-1). Unavoidable, documented, not defended. Shipped compose never does it. |
-| F-17 | — | §5.1, §2 | `vault` collides with HashiCorp; `vault` as a Python name is unusable. | **Decided: `ovenmitt`.** Binary `ovenmitt`, daemon `ovenmittd`, Python package and import `ovenmitt`, protocol header `X-Ovenmitt-Protocol`. MCP tool names stay `vault_*` — to the model, "vault" is the right picture. Free on PyPI; crates.io and GitHub to be checked by hand. |
+| F-17 | — | §5.1, §2 | `vault` collides with HashiCorp; `vault` as a Python name is unusable. | **Decided: `ovenmitt`.** Binary `ovenmitt`, daemon `ovenmittd`, Python package and import `ovenmitt`, protocol header `X-Ovenmitt-Protocol`, repo `utunga/oven-mitt`. MCP tool names stay `vault_*` — to the model, "vault" is the right picture. Free on PyPI and crates.io. |
 | F-18 | — | §4 credential | Scope? | **Decided.** `{id, name, vaults: [...] \| "*"}`. One allowlist — the vault's destinations. No per-credential destination scope. |
 | F-19 | — | §7 | Config reload. | Default. Restart only; config SHA-256 in the `start` entry. |
 | F-20 | — | silent | Several agent containers on one daemon? | Default. One daemon, one agent trust domain. |
@@ -534,7 +534,7 @@ These go in the docs verbatim.
 
 | Brief | PRD |
 |---|---|
-| project `llm-safe-kaitiaki` | project **ovenmitt** (repo rename is a separate decision) |
+| project `llm-safe-kaitiaki` | project **ovenmitt**; repo `utunga/oven-mitt` (hyphen in the repo name only) |
 | `vault` / `vault mcp` / `vault audit …` | `ovenmitt` / `ovenmitt mcp` / `ovenmitt audit …` |
 | daemon (unnamed) | `ovenmittd` |
 | `vault.put()` | `VaultClient.put()` from package `ovenmitt` |
