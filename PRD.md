@@ -545,7 +545,7 @@ These go in the docs verbatim.
 
 ---
 
-## Appendix A — Reconciliation with the second review (`PRD-hermes_digicryptids.md`)
+## Appendix A — Reconciliation with the second review (`PRD-hermes_digicryptids.md`, removed from the tree in 8a63eb0; see git history)
 
 **Converged independently:** resolve takes name + target (F-2/AMB-5); caller identity unfixable in Docker v1 (F-6/AMB-10); pattern grammar must be fixed (F-3/AMB-4); content hash audit-only (AMB-3); handles global (AMB-6); `remove_source` client-side (F-13/AMB-11); label bounds (F-14/AMB-12); body sends need rules (F-4/AMB-8); platform names in values not defaults (F-29/AMB-13).
 
