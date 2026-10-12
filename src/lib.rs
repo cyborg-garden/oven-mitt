@@ -5,6 +5,10 @@
 
 #![forbid(unsafe_code)]
 
+pub mod audit;
 pub mod cli;
 pub mod config;
+pub mod crypto;
+pub mod handle;
+pub mod keys;
 pub mod pattern;
