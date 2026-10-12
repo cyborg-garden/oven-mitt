@@ -18,7 +18,7 @@ To allow agents to use that API and still comply with the license, we use oven-m
 
 ### NOTE: The promise of oven-mitt is limited
 
-A human user - for instance a human with appropriate rights to the data - can defeat the LLM protections by simple 'copy and paste' into a chat session. This tool is focused on keeping the *agent* honest - even if it has a brain fart and decides to get 'creative' it cannot - easily - load data into its context. It makes the agent more reliable - and auditable. Using this tool the agent can manipulate data without ever loading it into context or having the ability to do that. It also creates an audit log and a review job that can be run regularly to make sure data wasn't sent to the wrong place. The threat which it manages against is primarily *accidental leakage*: an agent hallucination, careless tool code, or a misconfiguration that might lead to data accidentally entering the context. We prevent that. **However, keeping the data from a determined adversary, from a malicious tool or from a human that has a right to the data, is out of scope.** 
+A human user - for instance a human with appropriate rights to the data - can defeat the LLM protections by simple 'copy and paste' into a chat session. This tool is focused on keeping the *agent* honest - even if it has a brain fart and decides to get 'creative' it cannot - easily - load data into its context. It makes the agent more reliable - and auditable. Using this tool the agent can manipulate data without ever loading it into context or having the ability to do that. It also creates an audit log and a review job that can be run regularly to make sure data wasn't sent to the wrong place. The threat which it manages against is primarily *accidental leakage*: an agent hallucination, careless tool code, or a misconfiguration that might lead to data accidentally entering the context. We prevent that. **However, keeping the data from a determined adversary, from a malicious tool or from a human that has a right to the data, is out of scope.**
 
 Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, operator CLI. See [`PRD.md`](PRD.md) for the full specification and [`BRIEF.md`](BRIEF.md) for the design history and the motivating case.
 
@@ -31,7 +31,7 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 │                                              │         │   ├─ data/   ciphertext only     │
 │                                              │         │   ├─ keys/   never leaves        │
 └───────────────────────────-──────────────────┘         │   ├─ audit/  hash-chained JSONL  |
-                                                         │   └─ export                    ──-─▶ allowed export paths 
+                                                         │   └─ export                    ──-─▶ allowed export paths
                                                          └──────────────────────────────────┘
 ```
 
@@ -87,7 +87,7 @@ ttl             = "30d"   # optional: delete all data 30 days after the last wri
 max_object_size = "2GiB"  # optional: max size of data saved
 
 [vault.private.destinations.archive]
-kind      = "fs"          # allow exports of data into to the given path 
+kind      = "fs"          # allow exports of data into to the given path
 root      = "/var/lib/ovenmitt/export/transcripts"
 overwrite = false
 
@@ -98,9 +98,9 @@ match = "chat:group/team"   # a literal, or a literal ending in /* for one more 
 
 ### Credentials
 
-A credential unlocks exactly one operation: `resolve`, which streams an object's bytes out through the socket to the tool that will send them on. Nothing else needs one. Any process that can see the socket can `put`, label, export to a declared path, and delete — without credentials, by design. Configuration is never changed through the socket at all: the operator edits the TOML file and restarts the daemon.
+Credentials are required to unlock the `resolve` operation - which streams an object's bytes out through the socket to the tool that will send them on.. Any process that can see the socket can `put`, label, export to a declared path, and delete — without credentials, by design.
 
-Why gate `resolve` and nothing else? Because it is the only operation that produces plaintext *the caller can see*. Export writes plaintext too, but to a path the operator fixed in config, and the daemon does the writing — the caller never holds the bytes. Resolve hands the bytes to the caller, and the caller is, by necessity, a process in the agent's container. The credential is how the daemon tells a sending tool apart from the agent's terminal when both arrive over the same socket from the same container with the same UID. There is no other way to tell them apart in Docker; the credential *is* the read barrier. That is also why it must never sit anywhere the agent's shell can read — if it did, the barrier would be gone and nothing in the daemon could tell.
+Why gate `resolve` and nothing else? Because it is the only operation that produces plaintext *the caller can see*. Export writes plaintext too, but to a path fixed in config, and the daemon does the writing — the caller never holds the bytes. Resolve hands the bytes to the caller, and the caller is, by necessity, a process in the agent's container. The credential is how the daemon tells a sending tool apart from the agent's terminal when both arrive over the same socket from the same container with the same UID. There is no other way to tell them apart in Docker; the credential *is* the read barrier. That is also why it must never sit anywhere the agent's shell can read — if it did, the barrier would be gone and nothing in the daemon could tell.
 
 ```sh
 ovenmitt credential issue --name vault_send --vault private   # token on stdout, once
