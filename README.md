@@ -126,7 +126,7 @@ The rules and the thresholds for the review config live in an optional `review.t
 
 ### Operator checklist
 
-1. Mount **only** the socket volume into any container the agent runs in.  Never mount `data`, `keys`, `audit`, the config, or an export root.
+1. Mount **only** the socket volume into any container the agent can see.  Never mount `data`, `keys`, `audit`, the config, or an export root.
 2. Back up `keys` separately from `data`. Losing the keys volume loses every vault; the daemon refuses to start rather than re-key over existing objects.
 3. Deliver the consumer credential to tool code only.
 4. Run `audit review` on cron; anchor `audit head` somewhere the daemon host can't reach.
