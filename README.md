@@ -100,7 +100,7 @@ match = "chat:group/team"   # a literal, or a literal ending in /* for one more 
 
 Credentials are required to configure or change the configuration of a vault (eg adding a new export path). 
 
-Otherwise write-only 'put' and export into the configured/allowed destination paths is allowed.
+Otherwise write-only 'put' and export into the configured/allowed destination paths is allowed without credentials by any process that can see the daemon.
 
 ```sh
 ovenmitt credential issue --name vault_send --vault private   # token on stdout, once
