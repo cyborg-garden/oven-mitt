@@ -82,23 +82,25 @@ One TOML file, `/etc/ovenmitt/ovenmitt.toml`, mounted read-only into the daemon 
 
 ```toml
 [vault.private]
-expose_names    = false   # governs every object in the vault, past and future
-ttl             = "30d"   # optional: objects expire 30 days after their last body write
-max_object_size = "2GiB"  # optional
+expose_names    = false   # expose the metadata of filenames etc vs opaque handles
+ttl             = "30d"   # optional: delete all data 30 days after the last write to that file
+max_object_size = "2GiB"  # optional: max size of data saved
 
 [vault.private.destinations.archive]
-kind      = "fs"
-root      = "/var/lib/ovenmitt/export/archive"
+kind      = "fs"          # allow exports of data into to the given path 
+root      = "/var/lib/ovenmitt/export/transcripts"
 overwrite = false
 
 [vault.private.destinations.team-chat]
-kind  = "send"
+kind  = "send"              # allow send (as stream) into the given chat eg a signal chat
 match = "chat:group/team"   # a literal, or a literal ending in /* for one more segment
 ```
 
-Platform names are fine in your own values. They never appear in ovenmitt's code, keys, defaults or examples.
-
 ### Credentials
+
+Credentials are required to configure or change the configuration of a vault (eg adding a new export path). 
+
+Otherwise write-only 'put' and export into the configured/allowed destination paths is allowed.
 
 ```sh
 ovenmitt credential issue --name vault_send --vault private   # token on stdout, once
