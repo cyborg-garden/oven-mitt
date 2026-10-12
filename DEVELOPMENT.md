@@ -106,7 +106,7 @@ Pin the exact versions at `cargo add` time and commit `Cargo.lock`; the names an
 | Crate | Role | Note |
 |---|---|---|
 | `tokio` (full) | runtime, `UnixListener`, `UnixStream::peer_cred()` | peer_cred gives UID/PID with no extra crate |
-| `axum` 0.8 | HTTP router over the Unix listener | `axum::serve` accepts a `UnixListener` directly |
+| `axum` 0.8 | HTTP router | serving is our own loop over `hyper` (D-11); axum only routes |
 | `hyper`, `http-body-util` | streaming bodies in and out | pulled in by axum; used directly for `Body::from_stream` |
 | `tower-http` | request-body limit layer only | `max_object_size` enforced in the chunker too; the layer is a backstop |
 | `serde`, `serde_json`, `toml` | config, wire JSON, audit JSON | |
@@ -262,6 +262,9 @@ CI runs the first three on every push and the fourth on a manual trigger and on 
 | D-6 | `mime` is duplicated in cleartext `meta.json`. | `list` must not decrypt; `mime` is agent-visible anyway. |
 | D-7 | Python ≥ 3.11. | `tomllib`, modern typing; nothing older is worth supporting for a new package. |
 | D-8 | Daemon image built per-architecture inside Docker, never cross-compiled from the Mac. | The binary that runs in the container is built for the container. |
+| D-11 | The daemon runs its own accept loop over hyper's HTTP/1 server instead of `axum::serve`. | hyper drops a request whose client half-closed before the response unless `half_close(true)` is set, and `axum::serve` can't set it. Without it a client could send a refused request, close, and leave no audit entry — the exact thing R-AUD-6 forbids. Found by AT-23. |
+| D-12 | Each handler runs on its own Tokio task, spawned by the guard middleware. | hyper cancels the in-flight service future when the connection dies; spawning makes the handler (and its audit write) run to completion regardless. |
+| D-13 | A refused read (`stat`/`list` of something that isn't there) is audited as a refused `request`; successful reads are not logged. | Keeps SI-7 literally true ("every refused request yields exactly one entry") without logging every successful stat. An agent probing handles is worth seeing in `review`. |
 | D-10 | An unreadable or corrupt object record, or an object whose vault is no longer in the config, refuses startup. | Same posture as a missing key: a daemon that silently skips an object it can't account for is a daemon whose `list` lies. The message names the directory so the operator can move it aside. |
 | D-9 | Work lands on `tumu` in small commits; a feature branch + PR only when a milestone touches more than one layer at once. | Solo project; PR ceremony for every commit slows it down without catching anything a test run doesn't. Change this if a second contributor appears. |
 

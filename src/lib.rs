@@ -5,10 +5,12 @@
 
 #![forbid(unsafe_code)]
 
+pub mod api;
 pub mod audit;
 pub mod cli;
 pub mod config;
 pub mod crypto;
+pub mod daemon;
 pub mod export;
 pub mod handle;
 pub mod keys;

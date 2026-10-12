@@ -2,7 +2,7 @@
 
 *Project name: **ovenmitt** — handle the hot thing without touching it. Repo: `github.com/utunga/oven-mitt`. The hyphen is the repo's only; binary, daemon, package and PyPI name are `ovenmitt`.*
 
-*Status: draft 0.4, 2026-10-12. Derived from BRIEF.md (decisions 1–22), reconciled against the independent second review (`PRD-hermes_digicryptids.md`, Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
+*Status: draft 0.5, 2026-10-13 (0.4 + implementation clarifications from M4, marked inline). Derived from BRIEF.md (decisions 1–22), reconciled against the independent second review (`PRD-hermes_digicryptids.md`, Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
 
 **How to read this.** Requirements carry IDs (`R-xxx-n`), security invariants carry `SI-n`, tests carry `AT-n`. MUST/SHOULD/MAY are RFC 2119. §0 lists every point where the brief was silent or inconsistent and records how it was decided; nothing below is a silent assumption.
 
@@ -154,7 +154,7 @@ Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, 
 ### 3.10 Audit (R-AUD)
 - **R-AUD-1** Append-only JSONL at `audit_log`, single writer, one entry per line (§6.1).
 - **R-AUD-2** Hash-chained: `prev` = SHA-256 of the previous entry's canonical bytes (RFC 8785 JCS); genesis `prev` = 64 zeros; `seq` from 1.
-- **R-AUD-3** Events: `start`, `put`, `replace`, `delete`, `export`, `resolve`, `expire`, `label`, `request`. `stat`/`list`/`list_vaults`/`list_destinations`/`health` not logged.
+- **R-AUD-3** Events: `start`, `put`, `replace`, `delete`, `export`, `resolve`, `expire`, `label`, `request` (any request that could not be mapped to an operation, and any *refused* read — a `stat` of an unknown handle is logged as a refused `request`, so SI-7 holds for every refusal). Successful `stat`/`list`/`list_vaults`/`list_destinations`/`health` are not logged.
 - **R-AUD-4** Outcome ∈ `ok | refused | aborted`. **Every** `refused`, including malformed requests and unknown routes, is logged with its error code.
 - **R-AUD-5** Never logged: content bytes, label text, `root`, `match`, storage paths, credential secrets, `name` unless the vault's `expose_names` is `true`.
 - **R-AUD-6** Entry written and fsynced before the response leaves the daemon.
@@ -195,6 +195,8 @@ Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, 
 HTTP/1.1 over a Unix domain socket, as an internal framing choice (F-23). No TLS, no TCP, no HTTP/2. Requests carry `X-Ovenmitt-Protocol: 1`. JSON bodies are `application/json`; object bodies are raw bytes. A body on a bodiless route → `INVALID_REQUEST` (audited); only `put`/`replace` accept bytes in, only `resolve` returns bytes out. Header size ≤ 16 KiB; idle timeout 60 s on headers, none on bodies.
 
 Why HTTP: streaming both ways, status codes and headers for free, `curl --unix-socket` tests every endpoint from a shell, hyper and httpx both speak UDS. The Docker daemon itself works this way.
+
+Implementation clarifications (0.5): `/v1/health` is exempt from the protocol header so healthchecks stay one-liners. An unknown route *or an unsupported method on a known route* is `404 INVALID_REQUEST`. `X-Ovenmitt-Name` and `X-Ovenmitt-Label` values are percent-encoded UTF-8 (header values are ASCII; names are not). The server runs HTTP/1.1 with half-close enabled so a client that sends a request and closes before the response still has it processed and audited (R-AUD-6).
 
 ### 4.2 Endpoints
 

@@ -122,7 +122,7 @@ fn main() -> ExitCode {
         Command::Config {
             command: ConfigCommand::Check { path },
         } => cli::config::check(&path.unwrap_or(cli.config)),
-        Command::Daemon => not_yet("daemon", "M4"),
+        Command::Daemon => run_daemon(&cli.config),
         Command::Audit {
             command: AuditCommand::Verify,
         } => cli::audit::verify(&cli.config),
@@ -143,6 +143,28 @@ fn main() -> ExitCode {
             ExitCode::from(2)
         }
     }
+}
+
+fn run_daemon(config: &std::path::Path) -> anyhow::Result<ExitCode> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_env("OVENMITT_LOG")
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .with_writer(std::io::stderr)
+        .init();
+    // Startup is synchronous and blocks on the audit writer; it must finish
+    // before the runtime takes over the thread.
+    let prepared = match ovenmitt::daemon::prepare(config) {
+        Ok(p) => p,
+        Err(e) => {
+            eprintln!("ovenmitt: refusing to start: {e}");
+            return Ok(ExitCode::from(1));
+        }
+    };
+    let rt = tokio::runtime::Runtime::new()?;
+    rt.block_on(ovenmitt::daemon::run_prepared(prepared))?;
+    Ok(ExitCode::SUCCESS)
 }
 
 fn not_yet(what: &str, milestone: &str) -> anyhow::Result<ExitCode> {
