@@ -88,7 +88,7 @@ oven-mitt/
 │   └── test_at_*.py
 ├── docs/                      README sources: threat model, operator checklist, tool-author guide
 ├── BRIEF.md  PRD.md  DEVELOPMENT.md  LICENSE
-└── .github/workflows/ci.yml   fmt, clippy -D warnings, cargo test, python tests, image build
+└── .github/workflows/        rust.yml, python.yml, e2e.yml — one workflow per badge
 ```
 
 Not a Cargo workspace: one crate is enough and a workspace adds ceremony with no second crate to justify it. Split if a second binary ever appears. The crate has a library target plus the one binary, so integration tests in `tests/` can call modules directly and the binary stays a dispatcher.
@@ -244,7 +244,7 @@ In order, each step fatal on failure with a one-line reason on stderr:
 | Python (`python/tests`) | `pytest` against a daemon started by the Rust test helper binary or a local `ovenmitt daemon` | client parity with the wire, MCP tool list (SI-13 / AT-2), `vault_put` unlink-after-201, `list_vaults` on MCP (AT-29) |
 | End-to-end (`tests-e2e/`) | `pytest` on the Mac driving `docker compose -f docker/docker-compose.test.yml` | store absent from agent container (AT-8), no TCP listener (AT-20), `verify`/`review` via `docker exec` (AT-11), full sentinel sweep across containers (AT-13), denylist grep (AT-28) |
 
-CI runs the first three on every push and the fourth on a manual trigger and on tags (it needs Docker-in-CI and is slow). The Mac runs all four before any tag.
+CI runs all four on every push to `tumu`, as three workflows (`rust`, `python`, `e2e`) so each gets a README badge; e2e takes a few minutes because it builds both images. The Mac runs all four before any tag.
 
 **Sentinel discipline.** Every test that asserts "X never appears" uses a fresh 64-byte random string generated per test, never a fixed constant, so a stale fixture can't make a leak test pass.
 

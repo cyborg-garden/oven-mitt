@@ -1,5 +1,9 @@
 # ovenmitt
 
+[![rust](https://github.com/utunga/oven-mitt/actions/workflows/rust.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/rust.yml)
+[![python](https://github.com/utunga/oven-mitt/actions/workflows/python.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/python.yml)
+[![e2e](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml)
+
 *Handle the hot thing without touching it.*
 
 ovenmitt is a write-only vault for AI agents. Data goes in, an opaque handle comes out. The agent can label, export and send that data by handle — and nothing on the socket can read it back without a credential the agent doesn't have. It exists so that an agent can move data that must never enter an LLM's context (because the provider may retain or train on it) without that data ever appearing in a tool result.
