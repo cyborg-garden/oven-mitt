@@ -4,7 +4,9 @@
 
 ovenmitt is a write-only vault for AI agents. Data goes in, an opaque handle comes out. The agent can label, export and send that data by handle — and nothing on the socket can read it back without a credential the agent doesn't have. It exists so that an agent can move data that must never enter an LLM's context (because the provider may retain or train on it) without that data ever appearing in a tool result.
 
-It is **hard, not impossible.** The threat is accidental leakage: a well-meaning agent, careless tool code, a misconfiguration. A determined adversary and malicious tool code are out of scope, and the docs say so plainly rather than pretending otherwise.
+The promise is that it is **hard, not impossible** to read data into LLM. The threat that manages against is accidental leakage: an agent hallucination, careless tool code, a misconfiguration.
+
+Keeping the data from a determined adversary or a malicious tool is out of scope.
 
 Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, operator CLI. See [`PRD.md`](PRD.md) for the full specification and [`BRIEF.md`](BRIEF.md) for the design history and the motivating case.
 
@@ -38,7 +40,10 @@ docker compose -f docker/docker-compose.yml exec ovenmittd \
     ovenmitt credential issue --name vault_send --vault private
 ```
 
-From the agent container, with the Python package installed:
+
+### Python usage
+
+From inside the agent container, with the Python package installed:
 
 ```python
 from ovenmitt import VaultClient
@@ -52,6 +57,8 @@ c.export(info.handle, "archive", "transcript.txt")   # plaintext lands under the
 with c.resolve(info.handle, "team-chat", "chat:group/team", credential) as r:
     send_somewhere(r.stream)             # bytes pass through this process, never the model
 ```
+
+### MCP usage (how an agent will use this)
 
 Or let the model drive it through MCP: `ovenmitt mcp` serves eight tools — `vault_list_vaults`, `vault_list_destinations`, `vault_put`, `vault_stat`, `vault_list`, `vault_label`, `vault_delete`, `vault_export` — and nothing that returns content.
 
@@ -91,17 +98,21 @@ Only `sha256(secret)` is stored. Deliver the token to the tool that sends, by a 
 
 ### Audit
 
+Auditing of where the data is read to or from is important to verify that the agent wasn't (deliberately or accidentally) trying to access data it shouldn't.
+
 ```sh
 ovenmitt audit verify            # walks the chain; exit 1 names the first bad entry
 ovenmitt audit head              # head hash — anchor it off-host on a schedule
 ovenmitt audit review --since 24h   # findings to stderr; exit 1 at or above the threshold
 ```
 
-Put `review` in cron and let the nonzero exit page you. Rules and the threshold live in an optional `review.toml` ([example](docker/example/review.toml)).
+One idea is to put `ovenmitt audit review` in a cron job and let a nonzero exit trigger an alert.
+
+The rules and the thresholds for the review config live in an optional `review.toml` ([example](docker/example/review.toml)).
 
 ### Operator checklist
 
-1. Mount **only** the socket volume into any container the agent runs in. Never `data`, `keys`, `audit`, the config, or an export root.
+1. Mount **only** the socket volume into any container the agent runs in.  Never mount `data`, `keys`, `audit`, the config, or an export root.
 2. Back up `keys` separately from `data`. Losing the keys volume loses every vault; the daemon refuses to start rather than re-key over existing objects.
 3. Deliver the consumer credential to tool code only.
 4. Run `audit review` on cron; anchor `audit head` somewhere the daemon host can't reach.
@@ -117,23 +128,23 @@ Put `review` in cron and let the nonzero exit page you. Rules and the threshold 
 
 ## Limitations
 
-These are true by design.
+These are known limitations, by design.
 
 1. **Hard, not impossible.** The system makes accidental leakage hard. A determined agent, a lying tool, or an operator who mounts a root into the agent container can defeat it.
 2. **Two secrets.** Encryption keys never leave the daemon container. The consumer credential lives in the agent container and is the only read barrier; keep it out of the terminal tool's environment, PATH and readable files.
 3. **No credential is needed for intended use.** Putting, labelling, exporting to declared roots, deleting — all credential-free by design.
-4. **Export to a root you can see is a read path.** Unavoidable; not defended; the shipped compose never does it.
+4. **Export to a path you can see allows you to read the data.** Unavoidable; not defended; Configuration prevents export of raw data to anywhere except allowed paths, however.
 5. **MCP `vault_put(path)` protects from commit onward.** Producers that must never expose bytes to the agent put from a stream through the library.
 6. **Encryption at rest protects the data volume when it travels alone.** It never substitutes for isolation; the daemon must hold the key to run.
 7. **No physical erasure.** Delete destroys the key and unlinks the ciphertext; it doesn't scrub sectors.
 8. **`verify` cannot detect tail truncation.** Anchor `audit head` off-host on a schedule.
 9. **Caller identity is the credential.** UID/PID in the log are informational.
 10. **`expose_names` governs all objects in the vault, past and future.** Operators always see names via `object stat`.
-11. **Labels and names are agent-visible.** Don't put content in them.
+11. **Labels and names can be agent-visible.** Don't put content in them.
 12. **Losing `keys_dir` loses every vault.** Back it up separately.
-13. **Out of scope:** determined adversaries, lying tool code, prompt-injection covert channels, disk/log-fill DoS, multiple agent trust domains on one daemon.
+13. **Out of scope:** Determined adversaries, lying tool code, prompt-injection covert channels, disk/log-fill DoS, multiple agent trust domains on one daemon.
 
-## Developing
+## Developing / Contributing
 
 ```sh
 cargo clippy --all-targets -- -D warnings && cargo test   # Rust: unit + in-process daemon tests
@@ -145,4 +156,4 @@ Layout, decisions and milestones are in [`DEVELOPMENT.md`](DEVELOPMENT.md).
 
 ## Licence
 
-AGPL-3.0-only. Copyright Miles Thompson and contributors.
+AGPL-3.0-only. Copyright, Miles Thompson and contributors - but hoping this will merge to cyborg-garden at some point.
