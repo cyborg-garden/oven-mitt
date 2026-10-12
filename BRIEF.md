@@ -1,6 +1,8 @@
-# llm-safe-kaitiaki — BRIEF
+# ovenmitt — BRIEF
 
-*Status: brief (pre-PRD). Decisions captured from design interview, 2026-10-12.*
+*Status: brief. Decisions captured from design interview, 2026-10-12; updated the same day after PRD review (decisions 23–34). Project name is `ovenmitt`; the repo is `llm-safe-kaitiaki` until renamed.*
+
+*The one-line design criterion: make it **hard** for an agent to accidentally send protected data through its context, not impossible. Simple, elegant, free of foot-guns.*
 
 **Layout:**
 - **Part A:** The harness-independent tool, which is this repo.
@@ -17,7 +19,7 @@ Today, any tool output an agent produces lands in a tool result, and therefore i
 
 ## 2. What it is
 
-A generic, Unix-shaped **write-only sink**. Data goes in, and an opaque handle comes out. The agent can then label, export or send that data by handle, and **nothing in the agent's reach can read it back**.
+A generic, Unix-shaped **write-only sink**. Data goes in, and an opaque handle comes out. The agent can then label, export or send that data by handle, and **nothing in the agent's reach can read it back without the consumer credential**. Think oven mitt: you can pick the thing up and move it, you can't feel it.
 
 ```python
 h = vault.put(stream_from_some_tool(), vault="private")
@@ -28,15 +30,17 @@ h = vault.put(stream_from_some_tool(), vault="private")
 
 - **In scope:** *accidental* leakage. A well-meaning agent, careless tool code or a misconfiguration sends protected content to an LLM provider or an unapproved third party. Protection should be as strong as can reasonably be achieved: structural (the OS says no) wherever possible, not polite convention.
 - **Out of scope:** a determined adversary (e.g. prompt injection probing covert channels), and malicious tool code that lies about where it sends bytes. The docs say this plainly.
+- **Unavoidable, and documented rather than defended:** an agent can export to a declared root that it can also see, then read the file. No credential is needed for the intended use (put, label, export to declared roots, delete); the credential only gates `resolve`.
+- **Two secrets, kept apart in the docs:** the *encryption keys* never leave the daemon container, which is structural. The *consumer credential* has to live in the agent container, and keeping it away from the terminal tool is the deployer's job. That credential is the read barrier.
 
 ## 4. Core concepts
 
 - **Vault:** a named, path-rooted store with its own configuration. Anything written into a vault is protected.
-- **Handle:** a stable opaque id (`v_…`) for an object. Real filenames are hidden by default; per-vault `expose_names: true` opts in. Size, MIME type, mtime and human labels are always visible.
-- **Object:** whole-object, atomic. `put` commits on stream close, so a crash mid-stream leaves no half-object. `put --replace` streams a new body under the same handle, and the **old bytes are deleted immediately**. Content hashes are kept in the audit log only.
-- **Destination:** a *named* target declared per vault by the operator. It is either an export target (a filesystem root) or a send pattern that tool code must declare when it resolves bytes. The agent sees and chooses names; real paths, URLs and credentials never leave the daemon.
-- **Operator:** the human who deploys and configures the vault, through a config file the agent cannot read or write. End users and the agent can *use* declared destinations, never add them.
-- **Consumer credential:** issued by the operator to specific tool code (e.g. a send tool). It is required for `resolve`, and never given to the agent's shell.
+- **Handle:** a stable opaque id (`v_…`) for an object. Real filenames are always stored but hidden from the agent by default; per-vault `expose_names: true` opts in and governs every object in the vault, past and future. The operator can always see names (`ovenmitt object stat`). Size, MIME type, mtime and human labels are always visible.
+- **Object:** whole-object, atomic. `put` commits on stream close, so a crash mid-stream leaves no half-object. `put --replace` streams a new body under the same handle, and the **old bytes are deleted immediately**: each object has its own data key, wrapped by the vault key, and delete/replace/expiry destroys that key as well as unlinking the ciphertext. Content hashes are kept in the audit log only.
+- **Destination:** a *named* target declared per vault by the operator. It is either an export target (a filesystem root, with `overwrite` set by the operator) or a send pattern that tool code must match when it resolves bytes. The agent sees and chooses names; real paths, patterns and credentials never leave the daemon.
+- **Operator:** the human who deploys and configures the vault, through a config file the agent cannot read or write. That config file *is* the operator's authority; there is no separate admin credential. End users and the agent can *use* declared destinations, never add them.
+- **Consumer credential:** issued by the operator to specific tool code (e.g. a send tool), scoped to a list of vaults. It is required for `resolve`, and the deployer keeps it away from the terminal tool.
 
 ## 5. Architecture
 
@@ -47,15 +51,19 @@ One Rust daemon in its own Docker container. In v1 it has two faces for agents a
 | Face | For | Notes |
 |---|---|---|
 | Python client lib | tool authors | `put` from a stream; the **only** path that resolves bytes, and only with a consumer credential |
-| `vault mcp` | LLM tool calls | runs beside the agent, so `put` can take an agent-side path |
+| `ovenmitt mcp` | LLM tool calls | runs beside the agent, so `put` can take an agent-side path. Tool names are `vault_put`, `vault_export` etc.: to the model, "vault" is the right picture |
 
-There is also an **operator-only admin CLI** inside the daemon's container, for `vault audit verify` and `vault audit review`, run with `docker exec`. It isn't reachable from the agent's container.
+There is also an **operator-only admin CLI** inside the daemon's container (`ovenmitt audit verify|review|head`, `ovenmitt credential …`, `ovenmitt vault list`, `ovenmitt object stat`), run with `docker exec`. It isn't reachable from the agent's container.
 
-**No read command exists on any face.** Resolving a handle to bytes is a library call (`resolve(handle, destination) → stream`) for tool code.
+**No credential-free read exists on any face.** Resolving a handle to bytes is a library call for tool code, `resolve(handle, destination, target) → stream`, and it needs the consumer credential. The library ships in the agent container like everything else, so the credential, not the absence of a code path, is what stops the terminal tool reading. The socket protocol is the boundary; no client-side code is load-bearing.
 
-**Deployment (v1 is Docker only):** the vault volume and keys live in the daemon container only. Objects are encrypted at rest (AES-256-GCM, one key per vault, held only by the daemon). The agent container sees only the socket, so `cat` on the store is impossible: the files aren't in its filesystem.
+**Wire:** HTTP/1.1 over the Unix socket, as an internal detail. Think of the socket as a file you mount, not a server you reach. There is no TCP listener and no config key that could create one, ever.
 
-Losing a vault key means losing the vault. The docs say so.
+**Deployment (v1 is Docker only):** the vault volume and keys live in the daemon container only, in separate volumes. Objects are encrypted at rest (AES-256-GCM, one key per vault wrapping one key per object, held only by the daemon). Plaintext never touches disk inside the daemon. The agent container sees only the socket, so `cat` on the store is impossible: the files aren't in its filesystem.
+
+Encryption at rest protects the data volume when it travels without the keys volume (backups, snapshots). It never substitutes for isolation: the daemon has to hold the key to run, so something — Docker now, a dedicated OS user in local mode later — always keeps the key away from the agent.
+
+Losing a vault key means losing the vault; the daemon refuses to start and names the vault. The docs say so.
 
 ## 6. Operations (v1)
 
@@ -63,14 +71,14 @@ Losing a vault key means losing the vault. The docs say so.
 |---|---|
 | `put(stream \| path)` | stream in → handle. The library takes a stream; the MCP face takes a path, which the client reads and streams, since the daemon can't see agent paths. `remove_source` deletes the original after a successful commit |
 | `put(…, replace=<h>)` | stream a new body under the same handle; old bytes deleted |
-| `export <h> <destination> <filename>` | write to a declared destination. The agent picks the filename: sanitised, confined to the destination root, error on collision unless `overwrite: true` |
-| `stat`, `list`, `label`, `delete` | metadata only |
-| `list-destinations <vault>` | names only |
-| `resolve(h, destination)` *(lib only)* | stream bytes to tool code holding a consumer credential. Declared destination checked against the vault allowlist; every call audited |
+| `export <h> <destination> <filename>` | write to a declared destination. The agent picks the filename: sanitised, confined to the destination root, error on collision unless the destination is configured `overwrite = true`. No credential needed: the root is operator-fixed, so there is nothing to lie about |
+| `stat`, `list`, `label`, `delete` | metadata only; `delete` is a real delete (key destroyed) |
+| `list-vaults`, `list-destinations <vault>` | names only. No default vault; every call names one |
+| `resolve(h, destination, target)` *(lib only)* | stream bytes to tool code holding a consumer credential. The tool names the declared destination *and* the concrete target it will send to; the daemon checks the target against the destination's pattern and audits both. Trusts the tool to declare truthfully, which is where the threat model draws its line |
 
 On the MCP face, `put` takes a path only. The LLM has no stdin to give, and it must never be able to send content itself.
 
-Not in v1: the agent-facing CLI and `vpipe` (§10.2), content search (§10.2), filter, preview, concat or transforms, partial edits, version retention.
+Not in v1: the agent-facing CLI and `vpipe` (§10.2), content search (§10.2), filter, preview, concat or transforms, partial edits, version retention, message-body (inline text) sends.
 
 ## 7. Per-vault configuration (operator-only)
 
@@ -82,23 +90,23 @@ expose_names  = false
 ttl           = "30d"             # optional
 
 [vault.private.destinations]
-nas-archive  = { kind = "fs",   root = "/srv/nas/archive" }
-team-chat    = { kind = "send", match = "signal:group/team" }
-dm-body      = { kind = "send", match = "signal:dm/*", as = "body" }   # bytes sent as message text
+nas-archive  = { kind = "fs",   root = "/srv/nas/archive", overwrite = false }
+team-chat    = { kind = "send", match = "chat:group/team" }
+any-dm       = { kind = "send", match = "chat:dm/*" }    # one trailing wildcard segment; that's the whole grammar
 ```
 
-Every destination, whether export, send or message-body, must be declared here. The default is deny. The daemon doesn't know what Signal is: a send destination is just a pattern the resolving tool must declare.
+Every destination, export or send, must be declared here. The default is deny. The daemon doesn't know what any platform is: a send destination is just a pattern the resolving tool's declared target must match. Platform names are fine in an operator's own config values; they never appear in code, keys, defaults or shipped examples (decision 21).
 
 ## 8. Audit
 
 The audit trail is first-class: it is how we stay confident the boundary holds.
 
 - **Append-only, hash-chained JSONL** in the daemon, operator-only, never exposed to the agent.
-- **Events:** put, replace, delete, export, resolve, TTL expiry, and **every refusal** of any kind.
-- **Fields:** timestamp, vault, handle, version hash, destination *name*, caller (peer UID or credential id), outcome, previous-entry hash.
-- **Never logged:** content, real filenames (unless `expose_names`), resolved paths or URLs.
-- `vault audit verify` checks the chain. Anchoring the head hash off-host is a documented manual step in v1, automated later.
-- `vault audit review [--since] [--threshold]` is **rule-based** (rules in a config file) and ranked by severity. It flags:
+- **Events:** put, replace, delete, export, resolve, TTL expiry, label, and **every refusal** of any kind.
+- **Fields:** timestamp, vault, handle, version hash, destination *name*, the declared *target* on resolve (always; there is no switch to turn any part of auditing off), caller (peer UID and PID for forensics, credential id for authorisation — in Docker the UID can't tell processes apart, so only the credential counts), outcome, previous-entry hash.
+- **Never logged:** content, label text, real filenames (unless `expose_names`), destination roots and patterns, storage paths, credential secrets.
+- `ovenmitt audit verify` checks the chain. Anchoring the head hash off-host (`ovenmitt audit head`) is a documented manual step in v1, automated later.
+- `ovenmitt audit review [--since] [--threshold]` is **rule-based** (rules in a config file) and ranked by severity. It flags:
   - refusals
   - first-time destinations
   - bursts of resolves, exports or deletes
@@ -112,12 +120,12 @@ The audit trail is first-class: it is how we stay confident the boundary holds.
 1. `put` through the library and through MCP each return a handle plus metadata only.
 2. A test consumer holding a credential resolves the handle against a declared send pattern and receives the bytes intact.
 3. Each of these fails safely and is audited:
-   - there is no read command on the library or MCP faces
+   - no operation on the library or MCP faces returns bytes without a valid credential
    - the store is not in the agent container's filesystem at all
    - `resolve` without a credential: refused
-   - `resolve` to an undeclared destination: refused
+   - `resolve` to an undeclared destination, or with a target that doesn't match its pattern: refused
    - export outside the destination root (`../`): refused
-4. `vault audit verify` (admin CLI) passes, and `vault audit review` reports every refusal and exits nonzero.
+4. `ovenmitt audit verify` (admin CLI) passes, and `ovenmitt audit review` reports every refusal and exits nonzero.
 
 The end-to-end test with a real agent is in Part B (§B4).
 
@@ -141,11 +149,11 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
   - no detection of paraphrased, translated, summarised or encoded content
   - window size, normalisation (case, whitespace, punctuation, Unicode forms such as macrons) and the match threshold all need careful tuning
 - **Sealed producers:** wrappers around a specific tool or API with no plain-stdout mode, so the pipe can't be forgotten.
-- **Signed localhost URLs:** one-shot, expiring links (`http://127.0.0.1:…/o/<token>/name`) for consumers that only accept a path or URL. Every fetch is audited.
+- **`resolve_path`:** for consumer tools that only accept a filename. The library resolves into a `memfd` (an anonymous RAM-backed file that never appears on any filesystem) and spawns the tool with the descriptor inherited and `/dev/fd/N` as the path. Looks like a file, exists only for that child process, nothing on disk to race or `cat`, no daemon support, no TCP. (Replaces the earlier "signed localhost URLs" idea, which would have needed a TCP listener.) A FIFO in the socket volume is the fallback for already-running daemons, kept out until something needs it.
 
 ## 11. Open items
 
-- None at present.
+- Rename the repo to `ovenmitt` (and check crates.io / GitHub for the name; PyPI is free).
 
 ## 12. Decisions log
 
@@ -158,21 +166,33 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 5 | v1 is Docker only; local mode is future |
 | 6 | Core primitive is the generic write-only sink; sealed producers layer on top later |
 | 7 | Sends use the harness's existing surfaces and identity, resolving by handle in tool code |
-| 8 | No read command; resolve is lib-only and needs a consumer credential |
+| 8 | No credential-free read on any face; resolve is lib-only and needs a consumer credential; the socket protocol is the boundary |
 | 9 | v1 faces: Python lib and MCP, plus an operator-only admin CLI in the daemon container; agent-facing CLI is future |
-| 10 | Stable handles, whole-object atomic replace, old bytes deleted immediately |
-| 11 | `export(handle, destination, filename)`; destinations named, declared per vault, operator-only |
-| 12 | Every resolve declares a destination, checked against the per-vault allowlist |
-| 13 | Message-body sends are a destination type; `vpipe` is future |
+| 10 | Stable handles, whole-object atomic replace, old bytes deleted immediately (per-object key destroyed) |
+| 11 | `export(handle, destination, filename)`; destinations named, declared per vault, operator-only; `overwrite` is destination config, not an agent argument |
+| 12 | Every resolve declares a destination *and* a concrete target, checked against the per-vault allowlist and the destination's pattern |
+| 13 | Message-body sends are **not** in v1; every send is bytes. `vpipe` is future |
 | 14 | Encrypted at rest |
 | 15 | Hash-chained audit log, `verify`, and rule-based cron-friendly `review` |
 | 16 | No content check, search or LLM proxy in v1; they are future candidates (§10.2) |
 | 17 | Rust core, Python client, AGPL-3.0 (matches Swarm Map) |
 | 18 | Optional per-vault TTL, unset by default |
-| 19 | Name: `llm-safe-kaitiaki` |
+| 19 | Name: `ovenmitt` (binary `ovenmitt`, daemon `ovenmittd`, Python package `ovenmitt`; MCP tools `vault_*`). Was `llm-safe-kaitiaki` |
 | 20 | No policy modes. Every behaviour is set by explicit per-vault config |
-| 21 | No domain-specific names (licences, providers, communities, platforms) in core code, config keys or defaults |
+| 21 | No domain-specific names (licences, providers, communities, platforms) in core code, config keys, defaults or shipped examples. Operator config values are unrestricted |
 | 22 | One `put` operation: a stream (library) or a path (MCP); `remove_source`, `replace`. No separate import |
+| 23 | Design criterion: hard, not impossible. Simplicity over marginal guarantees |
+| 24 | Two secrets: encryption keys never leave the daemon (structural); the consumer credential is the read barrier and the deployer keeps it from the terminal tool |
+| 25 | Export needs no credential: the root is operator-fixed. Export-to-a-root-you-can-see is unavoidable and documented |
+| 26 | Encryption at rest kept (cheap; makes delete real; protects a data volume travelling alone). Keys in a separate volume. Never a substitute for isolation |
+| 27 | Wire: HTTP/1.1 over the Unix socket as an internal detail. No TCP listener, no config key for one, ever |
+| 28 | Send-pattern grammar: a literal, optionally ending in `/*` for one segment. Nothing else |
+| 29 | Resolve target is always audited. No switch; no per-vault admin credential — the config file is the operator's authority |
+| 30 | Missing vault key: refuse to start, naming the vault |
+| 31 | Filenames always stored; agent sees them iff `expose_names` is on now; operator always can |
+| 32 | Consumer credentials are scoped to a list of vaults; the vault's destination list is the only allowlist |
+| 33 | `list-vaults` exists; there is no default vault |
+| 34 | In Docker the peer UID can't identify a caller; credential-or-not is the only distinction. `SO_PEERCRED` is the local-mode fix, future |
 
 # Part B — Harness integration (separate PR to Swarm Map)
 
@@ -199,8 +219,8 @@ Later Swarm Map work: a vault/destination config API behind its UI, and an audit
 ## B3. `vault_send` flow
 
 1. Read the current platform and chat from Hermes's session context.
-2. `resolve(handle, "signal:<chat>")` using the consumer credential. The daemon checks it against the vault's declared send patterns and audits it.
-3. Stream the bytes to signal-cli as a data-URI attachment, or as message text for a body destination.
+2. `resolve(handle, "<destination name>", "signal:<chat>")` using the consumer credential. The daemon checks the target against that destination's pattern and audits both.
+3. Stream the bytes to signal-cli as a data-URI attachment.
 4. Return only `sent ✓` to the LLM.
 
 ## B4. End-to-end acceptance test (one Hermes agent)
@@ -211,10 +231,10 @@ Reference producer: a Papa Reo API call (Part C). Any tool whose output must sta
 2. The agent calls the producer tool and receives a handle plus metadata only.
 3. The agent calls `vault_send(handle)`, and the user receives the file as a Signal attachment.
 4. Each leak attempt fails safely:
-   - "read it back": there is no read path
+   - "read it back": there is no credential-free read path, and the credential is not where the terminal tool can find it
    - `cat` on the store: not in the agent's filesystem
    - export to an undeclared destination: refused and audited
-5. `vault audit verify` passes, and `vault audit review` reports the refusals.
+5. `ovenmitt audit verify` passes, and `ovenmitt audit review` reports the refusals.
 6. A capture of every LLM request in the session contains **zero** protected content.
 
 ## B5. Open items
