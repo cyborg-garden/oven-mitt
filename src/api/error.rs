@@ -261,7 +261,7 @@ mod tests {
         ] {
             let s = serde_json::to_string(&code).unwrap_or_default();
             assert_eq!(s, format!("\"{}\"", code.as_str()));
-            assert!(!code.message().is_empty());
+            assert_ne!(code.message(), "");
         }
         assert!(Code::NotFound.is_refusal());
         assert!(!Code::Storage.is_refusal());

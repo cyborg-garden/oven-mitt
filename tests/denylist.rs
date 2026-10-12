@@ -85,5 +85,10 @@ fn no_domain_names_in_code_config_or_tests() {
     }
     // this file names the terms on purpose
     hits.retain(|h| !h.starts_with("tests/denylist.rs"));
-    assert!(hits.is_empty(), "domain names found:\n{}", hits.join("\n"));
+    assert_eq!(
+        hits,
+        Vec::<String>::new(),
+        "domain names found:\n{}",
+        hits.join("\n")
+    );
 }

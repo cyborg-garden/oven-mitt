@@ -121,7 +121,7 @@ fn put_commit_stat_list_round_trip() {
     assert_eq!(st, c.info);
     let listed = store.list(Some("private"), 1_001).unwrap();
     assert_eq!(listed, vec![c.info.clone()]);
-    assert!(store.list(Some("hidden"), 1_001).unwrap().is_empty());
+    assert_eq!(store.list(Some("hidden"), 1_001).unwrap(), Vec::new());
     assert!(matches!(
         store.list(Some("nope"), 1_001),
         Err(StoreError::VaultNotFound)
@@ -171,7 +171,7 @@ fn aborted_put_leaves_nothing_and_startup_sweeps_temp() {
         store.stat(&handle, 1_001),
         Err(StoreError::NotFound)
     ));
-    assert!(store.list(None, 1_001).unwrap().is_empty());
+    assert_eq!(store.list(None, 1_001).unwrap(), Vec::new());
     assert!(fs::read_dir(f.data.join("tmp")).unwrap().next().is_none());
 
     // simulate a crash: leave junk in tmp, reopen, it's gone
@@ -185,7 +185,7 @@ fn aborted_put_leaves_nothing_and_startup_sweeps_temp() {
     let (store, report) = open(&f, 2_000);
     assert_eq!(report.swept_tmp, 1);
     assert!(fs::read_dir(f.data.join("tmp")).unwrap().next().is_none());
-    assert!(store.list(None, 2_000).unwrap().is_empty());
+    assert_eq!(store.list(None, 2_000).unwrap(), Vec::new());
 }
 
 #[test]
@@ -346,7 +346,7 @@ fn ttl_expires_on_access_and_on_sweep_and_replace_resets() {
     assert_eq!(report.expired.len(), 1);
     assert_eq!(report.expired[0].handle, c4.info.handle);
     assert_eq!(report.objects, 0);
-    assert!(store.list(None, 100_000).unwrap().is_empty());
+    assert_eq!(store.list(None, 100_000).unwrap(), Vec::new());
 }
 
 #[test]
@@ -357,7 +357,7 @@ fn max_object_size_is_enforced_mid_stream() {
     s.write(&[0u8; 1000]).unwrap();
     assert!(matches!(s.write(&[0u8; 25]), Err(StoreError::TooLarge)));
     drop(s);
-    assert!(store.list(None, 1_001).unwrap().is_empty());
+    assert_eq!(store.list(None, 1_001).unwrap(), Vec::new());
     assert!(fs::read_dir(f.data.join("tmp")).unwrap().next().is_none());
     // exactly at the limit is fine
     let mut s = store.begin_put("private", PutParams::default()).unwrap();

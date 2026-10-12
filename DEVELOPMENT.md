@@ -93,7 +93,7 @@ oven-mitt/
 
 Not a Cargo workspace: one crate is enough and a workspace adds ceremony with no second crate to justify it. Split if a second binary ever appears. The crate has a library target plus the one binary, so integration tests in `tests/` can call modules directly and the binary stays a dispatcher.
 
-No `rust-toolchain.toml`: the cloud shell where day-to-day builds happen has 1.97 and can't download toolchains, so `rust-version = "1.97"` is the floor and anything newer (your Mac has 1.99) is fine. Pin a toolchain file when CI needs reproducibility badly enough to pay for it.
+No `rust-toolchain.toml`: the cloud shell where day-to-day builds happen has 1.97 and can't download toolchains, so `rust-version = "1.97"` is the floor. CI pins 1.99.0 (the Mac's version) because clippy's lint set changes between releases and `-D warnings` turns a new lint into a red build; a lint that only 1.99 knows about is fixed in code, never allowed in `Cargo.toml` (an unknown lint name is itself a warning on 1.97).
 
 ---
 

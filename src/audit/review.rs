@@ -551,7 +551,7 @@ mod tests {
         );
         // since excludes it
         let f = review(&entries, None, &Rules::default(), Some(2000));
-        assert!(f.is_empty());
+        assert_eq!(f, Vec::new());
         // chain finding ignores since
         let f = review(&entries, Some(&b), &Rules::default(), Some(2000));
         assert_eq!(f.len(), 1);

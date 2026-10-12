@@ -545,7 +545,7 @@ max_size = "8MiB"
             other @ Destination::Fs { .. } => panic!("wrong kind: {other:?}"),
         }
         let media = &c.vaults["media"];
-        assert!(media.destinations.is_empty());
+        assert_eq!(media.destinations.len(), 0);
         assert_eq!(c.destination_count(), 3);
     }
 
@@ -557,7 +557,7 @@ max_size = "8MiB"
             PathBuf::from("/run/ovenmitt/ovenmitt.sock")
         );
         assert_eq!(c.daemon.socket_mode, 0o666);
-        assert!(c.vaults.is_empty());
+        assert_eq!(c.vaults.len(), 0);
     }
 
     // AT-18: each invalid case refuses with a line number.

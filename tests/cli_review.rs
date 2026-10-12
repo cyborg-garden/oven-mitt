@@ -84,7 +84,7 @@ async fn review_reports_refusals_and_exits_by_threshold() {
     let cfg = cli_config(&d, None);
     let (code, out, err) = run(&cfg, &["audit", "review"]);
     assert_eq!(code, 1, "{err}");
-    assert!(out.is_empty(), "stdout empty without --json: {out}");
+    assert_eq!(out, "", "stdout empty without --json");
     for reason in [
         "NOT_FOUND",
         "PROTOCOL_UNSUPPORTED",
