@@ -4,7 +4,7 @@
 [![python](https://github.com/utunga/oven-mitt/actions/workflows/python.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/python.yml)
 [![e2e](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml)
 
-*Allow AI agents to manipulate data and files without sending data to their servers.*
+*Allow AI agents to manipulate data and files without sending the data to the LLM provider's servers.*
 
 oven-mitt is an arms-length vault for AI agents. Data goes in, an opaque handle comes out. The agent can label, export and send that data to their users or on to other processes using the handle — but nothing on the socket can be read back into the agents context without a credential (that the agent doesn't have).
 
@@ -14,7 +14,7 @@ This is intended to be generally useful but was motivated by a desire to comply 
 
 > You must not send model outputs to third party services that may collect and use them.
 
-To allow agents to use that API and still comply with the license, we use oven-mitt. Data goes straight from the tool-use / api-call into the vault. The agent can then move the data around but it is prevented from entering into the LLM's context. Agents are stochastic and therefore unreliable - this tools makes it very hard for them to read the raw data or load into their context. Combined with appropriate agent tooling (e.g. in [swarm-map](https://github.com/cyborg-garden/swarm-map)) it make sit possible for an agent to use a tool to create data and send it to the human while keeping the data encrypted and **inaccessible to the agent itself**.
+To allow agents to use that API and still comply with the license, we use oven-mitt. Data goes straight from the tool-use / api-call into the vault. The agent can then move the data around but it is prevented from entering into the LLM's context. Agents are stochastic and therefore unreliable - this tools makes it very hard for them to read the raw data or load into their context. Combined with appropriate agent tooling (e.g. in [swarm-map](https://github.com/cyborg-garden/swarm-map)) it makes it possible for an agent to use a tool to create data and send it to the human while keeping the data encrypted and **inaccessible to the agent itself**.
 
 ### NOTE: The promise of oven-mitt is limited
 
@@ -36,12 +36,12 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 ```
 
 - **Vault** — a named store declared by the operator. Objects are encrypted at rest with a per-object key wrapped by a per-vault key; the daemon never writes plaintext to its own disk.
-- **Handle** — `v_9c1e4a0b2d31`. Stable, opaque, not a secret. Size, MIME type, timestamps and labels are visible to the agent; the original filename only if the cpnfiguration allows.
+- **Handle** — `v_9c1e4a0b2d31`. Stable, opaque, not a secret. Size, MIME type, timestamps and labels are visible to the agent; the original filename only if the configuration allows.
 - **Destination** — a *named* target the operator declares per vault: an `fs` root (for `export`) or a `send` pattern (for `resolve`). The default is deny. The agent sees names, never roots or patterns.
 - **Consumer credential** — a token the operator issues to specific tool code. It is the only way to get bytes out through the socket, and the deployer keeps it away from the agent's terminal.
 - **Audit log** — append-only, hash-chained. Every put, replace, delete, export, resolve, expiry and **every refusal** is recorded, with the resolve target. `ovenmitt audit review` flags refusals, first-time destinations, bursts, churn and chain breaks, and exits nonzero for cron.
 
-The socket speaks HTTP/1.1 internally but acts as if it is a file handle. A write-only file you mount, not a server you reach: there is no TCP layer and no configuration key that could create one.
+The socket speaks HTTP/1.1 internally but think of it as a file you mount, not a server you reach — content goes in and never comes out without a credential: there is no TCP layer and no configuration key that could create one.
 
 ## Quick start
 
@@ -82,7 +82,7 @@ One TOML file, `/etc/ovenmitt/ovenmitt.toml`, mounted read-only into the daemon 
 
 ```toml
 [vault.private]
-expose_names    = false   # expose the metadata of filenames etc vs opaque handles
+expose_names    = false   # show the original filename in metadata (handles are always opaque)
 ttl             = "30d"   # optional: delete all data 30 days after the last write to that file
 max_object_size = "2GiB"  # optional: max size of data saved
 
@@ -92,15 +92,15 @@ root      = "/var/lib/ovenmitt/export/transcripts"
 overwrite = false
 
 [vault.private.destinations.team-chat]
-kind  = "send"              # allow send (as stream) into the given chat eg a signal chat
+kind  = "send"              # let credentialed tool code stream bytes out, declaring a target that must match
 match = "chat:group/team"   # a literal, or a literal ending in /* for one more segment
 ```
 
 ### Credentials
 
-Credentials are required to configure or change the configuration of a vault (eg adding a new export path). 
+A credential unlocks exactly one operation: `resolve`, which streams an object's bytes out through the socket to the tool that will send them on. Nothing else needs one. Any process that can see the socket can `put`, label, export to a declared path, and delete — without credentials, by design. Configuration is never changed through the socket at all: the operator edits the TOML file and restarts the daemon.
 
-Otherwise write-only 'put' and export into the configured/allowed destination paths is allowed without credentials by any process that can see the daemon.
+Why gate `resolve` and nothing else? Because it is the only operation that produces plaintext *the caller can see*. Export writes plaintext too, but to a path the operator fixed in config, and the daemon does the writing — the caller never holds the bytes. Resolve hands the bytes to the caller, and the caller is, by necessity, a process in the agent's container. The credential is how the daemon tells a sending tool apart from the agent's terminal when both arrive over the same socket from the same container with the same UID. There is no other way to tell them apart in Docker; the credential *is* the read barrier. That is also why it must never sit anywhere the agent's shell can read — if it did, the barrier would be gone and nothing in the daemon could tell.
 
 ```sh
 ovenmitt credential issue --name vault_send --vault private   # token on stdout, once
@@ -112,7 +112,7 @@ Only `sha256(secret)` is stored. Deliver the token to the tool that sends, by a 
 
 ### Audit
 
-Auditing of where the data is read to or from is important to verify that the agent wasn't (deliberately or accidentally) trying to access data it shouldn't.
+The audit log records where every object went — each put, export and resolve, with the declared target — and every request the daemon refused. It is how you verify after the fact that the agent wasn't (deliberately or accidentally) trying to reach data it shouldn't.
 
 ```sh
 ovenmitt audit verify            # walks the chain; exit 1 names the first bad entry
