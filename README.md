@@ -27,7 +27,7 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 ```
 ┌──────────────── agent container ──────────-──┐         ┌──────── oven-mitt vault --───────┐
 │  LLM running in a 'local' agent harness      │         │                                  │
-│            tool code  ──-─▶ /run/ovenmitt/ovenmitt.sock ─▶ ovenmittd                      │
+│        tool-use output  ──-─▶ /run/ovenmitt/ovenmitt.sock ─▶ ovenmittd                    │
 │                                              │         │   ├─ data/   ciphertext only     │
 │                                              │         │   ├─ keys/   never leaves        │
 └───────────────────────────-──────────────────┘         │   ├─ audit/  hash-chained JSONL  |
