@@ -25,7 +25,7 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 ## How it works
 
 ```
-┌──────────────── agent container ──────────-──┐         ┌──────── daemon container ────────┐
+┌──────────────── agent container ──────────-──┐         ┌──────── oven-mitt vault --───────┐
 │  LLM ⇄ harness ⇄ MCP server.                 │         │                                  │
 │            tool code  ──-─▶ /run/ovenmitt/ovenmitt.sock ─▶ ovenmittd                      │
 │                                              │         │   ├─ data/   ciphertext only     │
