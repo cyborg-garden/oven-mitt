@@ -105,14 +105,28 @@ def test_store_is_not_in_the_agent_container(stack):
 
 
 def test_daemon_has_no_tcp_listener(stack):
-    """AT-20 / SI-2: nothing in LISTEN state in /proc/net/tcp{,6}."""
+    """AT-20 / SI-2: the daemon process owns no LISTEN socket.
+
+    /proc/net/tcp is per network namespace and Docker's embedded DNS
+    resolver (127.0.0.11) lives in it, so attribute sockets by inode to
+    the daemon, which is PID 1 in its container."""
+    listening: dict[str, str] = {}
     for f in ("/proc/net/tcp", "/proc/net/tcp6"):
         r = stack.daemon("cat", f, check=False)
         if r.returncode != 0:
             continue
-        lines = r.stdout.decode().splitlines()[1:]
-        listening = [l for l in lines if l.split()[3] == "0A"]
-        assert listening == [], listening
+        for line in r.stdout.decode().splitlines()[1:]:
+            cols = line.split()
+            if cols[3] == "0A":
+                listening[cols[9]] = line.strip()
+    r = stack.daemon("sh", "-c", "ls -l /proc/1/fd")
+    owned = [line for line in r.stdout.decode().splitlines() if "socket:[" in line]
+    daemon_inodes = {line.split("socket:[")[1].rstrip("]") for line in owned}
+    hits = {ino: l for ino, l in listening.items() if ino in daemon_inodes}
+    assert hits == {}, hits
+    assert daemon_inodes, "sanity: the daemon holds at least its Unix listener"
+    # and sanity on the method: it is PID 1 and it is ovenmitt
+    assert b"ovenmitt" in stack.daemon("cat", "/proc/1/cmdline").stdout
 
 
 def test_topology_never_leaks_into_the_audit_log(stack):
