@@ -37,7 +37,7 @@ Status: **v1 (0.1.0)**, Docker only. Rust daemon, Python client and MCP server, 
 - **Consumer credential** — a token the operator issues to specific tool code. It is the only way to get bytes out through the socket, and the deployer keeps it away from the agent's terminal.
 - **Audit log** — append-only, hash-chained. Every put, replace, delete, export, resolve, expiry and **every refusal** is recorded, with the resolve target. `ovenmitt audit review` flags refusals, first-time destinations, bursts, churn and chain breaks, and exits nonzero for cron.
 
-The socket speaks HTTP/1.1, but think of it as a file you mount, not a server you reach: there is no TCP listener and no configuration key that could create one.
+The socket speaks HTTP/1.1 internally but acts as if it is a file handle. A write-only file you mount, not a server you reach: there is no TCP layer and no configuration key that could create one.
 
 ## Quick start
 
