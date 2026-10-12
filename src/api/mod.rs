@@ -8,6 +8,7 @@ pub mod export;
 pub mod objects;
 pub mod outcome;
 pub mod peer;
+pub mod resolve;
 pub mod vaults;
 
 use std::sync::Arc;
@@ -22,6 +23,7 @@ use axum::routing::{get, post};
 
 use crate::audit::writer::AuditLog;
 use crate::config::Config;
+use crate::credential::Credentials;
 use crate::store::Store;
 use error::{ApiError, Code};
 use outcome::{Ctx, finish};
@@ -37,6 +39,7 @@ pub struct AppState {
     pub store: Arc<Store>,
     pub audit: AuditLog,
     pub config: Arc<Config>,
+    pub credentials: Arc<Credentials>,
 }
 
 impl std::fmt::Debug for AppState {
@@ -64,6 +67,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/objects", get(objects::list))
         .route("/v1/objects/{handle}/export", post(export::export))
+        .route("/v1/objects/{handle}/resolve", post(resolve::resolve))
         .fallback(fallback)
         .method_not_allowed_fallback(fallback)
         .layer(middleware::from_fn_with_state(state.clone(), guard))

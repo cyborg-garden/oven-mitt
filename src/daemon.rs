@@ -96,6 +96,10 @@ pub fn prepare_with(config: Config, config_sha256: &str) -> Result<Prepared, Sta
         audit.append_blocking(d)?;
     }
 
+    // Credentials file (absent = none yet).
+    let credentials = crate::credential::Credentials::open(&config.daemon.credentials)
+        .map_err(|e| StartError::Config(format!("credentials file: {e}")))?;
+
     // 7: socket.
     let listener = bind_socket(&config)?;
 
@@ -104,6 +108,7 @@ pub fn prepare_with(config: Config, config_sha256: &str) -> Result<Prepared, Sta
             store,
             audit,
             config: Arc::new(config),
+            credentials: Arc::new(credentials),
         },
         listener,
     })

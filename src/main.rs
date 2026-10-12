@@ -132,7 +132,15 @@ fn main() -> ExitCode {
         Command::Audit {
             command: AuditCommand::Review { .. },
         } => not_yet("audit review", "M6"),
-        Command::Credential { .. } => not_yet("credential", "M5"),
+        Command::Credential {
+            command: CredentialCommand::Issue { name, vaults },
+        } => cli::credential::issue(&cli.config, &name, &vaults),
+        Command::Credential {
+            command: CredentialCommand::List,
+        } => cli::credential::list(&cli.config),
+        Command::Credential {
+            command: CredentialCommand::Revoke { id },
+        } => cli::credential::revoke(&cli.config, &id),
         Command::Vault { .. } => not_yet("vault", "M6"),
         Command::Object { .. } => not_yet("object", "M6"),
     };

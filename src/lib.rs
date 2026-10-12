@@ -9,6 +9,7 @@ pub mod api;
 pub mod audit;
 pub mod cli;
 pub mod config;
+pub mod credential;
 pub mod crypto;
 pub mod daemon;
 pub mod export;
