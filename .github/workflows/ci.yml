@@ -25,6 +25,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --project python --all-extras
       - run: uv run --project python pytest python/tests -q

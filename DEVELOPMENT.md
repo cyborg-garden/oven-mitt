@@ -128,7 +128,7 @@ Not used, deliberately: a JCS crate (§6 explains why we don't need one), `nix` 
 | Package | Role |
 |---|---|
 | `httpx` | HTTP over UDS: `httpx.HTTPTransport(uds=path)`; streaming request and response bodies |
-| `mcp` | official SDK; `FastMCP` for the server |
+| `mcp` (2.x) | official SDK; `MCPServer` (what 1.x called `FastMCP`) for the server |
 | `pytest`, `pytest-asyncio` (dev) | |
 
 Built with `uv`; `uv build` produces the wheel the agent image installs.
@@ -220,7 +220,7 @@ In order, each step fatal on failure with a one-line reason on stderr:
 
 - `VaultClient` is thin: one method per endpoint, PRD §10.2 signatures exactly. `put` accepts `bytes`, a file object, or an iterator; it hands httpx a generator so nothing is buffered. `resolve` returns a `Resolved` whose `.stream` iterates `httpx` response chunks; the response is closed when the iterator is exhausted or the object is used as a context manager.
 - `errors.py`: `OvenmittError(code, message, status)` raised from any non-2xx; the code is the wire code, unchanged.
-- `mcp.py`: `FastMCP("ovenmitt")` with exactly the eight tools in R-FAC-2. Tool docstrings are the descriptions the LLM sees; they say what each tool returns (metadata) and never mention reading. `vault_put` opens the path, calls `client.put`, and unlinks only on success when `remove_source` is set. There is one unit test whose whole job is to assert the tool list equals the fixed set (SI-13).
+- `mcp.py`: `MCPServer("ovenmitt")` with exactly the eight tools in R-FAC-2. Tool docstrings are the descriptions the LLM sees; they say what each tool returns (metadata) and never mention reading. `vault_put` opens the path, calls `client.put`, and unlinks only on success when `remove_source` is set. There is one unit test whose whole job is to assert the tool list equals the fixed set (SI-13).
 - No `resolve` anywhere in `mcp.py`; `grep -c resolve python/src/ovenmitt/mcp.py` is a CI check, crude and effective.
 
 ---
