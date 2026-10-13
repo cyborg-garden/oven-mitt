@@ -14,7 +14,7 @@ This is intended to be generally useful but was motivated by a desire to comply 
 
 > You must not send model outputs to third party services that may collect and use them.
 
-To allow agents to use that API and still comply with the license, we use oven-mitt. Data goes straight from the tool-use / api-call into the vault. The agent can then move the data around but it is prevented from entering into the LLM's context. Agents are stochastic and therefore unreliable - this tools makes it very hard for them to read the raw data or load into their context. Combined with appropriate agent tooling (e.g. in [swarm-map](https://github.com/cyborg-garden/swarm-map)) it makes it possible for an agent to use a tool to create data and send it to the human while keeping the data encrypted and **inaccessible to the agent itself**.
+To allow agents to use that API and still comply with the license, we use oven-mitt. Data goes straight from the tool-use / api-call into the vault. The agent can then move the data around but it is prevented from entering into the LLM's context. Agents are stochastic and therefore unreliable - this tool makes it hard for them to read the raw data or load into their context. Combined with appropriate agent tooling (e.g. in [swarm-map](https://github.com/cyborg-garden/swarm-map)) it makes it possible for an agent to use a tool to create data and send it to the human while keeping the data encrypted and **inaccessible to the agent itself**.
 
 ### NOTE: The promise of oven-mitt is limited
 
