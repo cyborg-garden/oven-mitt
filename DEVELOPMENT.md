@@ -301,6 +301,7 @@ Rough shape of effort: M0–M3 are where Rust is learned; expect them to be slow
 - Tests that assert absence use per-test random sentinels (§10).
 - Commit messages: imperative subject, body says why; reference `R-`/`SI-`/`AT-` IDs when a commit makes one pass.
 - `CHANGELOG.md` from M0 onward, "Unreleased" section, keep-a-changelog style.
+- **GitHub org: `cyborg-garden` wherever possible.** The intended homes are `cyborg-garden/oven-mitt` and `cyborg-garden/papareo-transcribe`. Where a `utunga/` path has to be used in the meantime (a repo URL, a `git:` pin, a badge, a package's `repository` field), put a `FIXME` comment next to it saying it moves to `cyborg-garden` as soon as that is fixed, so `rg 'FIXME.*cyborg-garden'` finds every one. Historical records (decision logs, changelogs) describe what was true at the time and don't need one.
 
 ---
 
