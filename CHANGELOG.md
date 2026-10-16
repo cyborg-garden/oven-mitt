@@ -7,6 +7,8 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 ### Added
 - `VaultClient.resolve_path(handle, destination, target, credential, filename)`: resolves into a `memfd` and yields a one-shot path (a symlink named `filename` in a private temp dir) for senders that only take a filename. Closed and removed when the `with` block ends. Linux only; `docker/Dockerfile.pytest` runs the Python tests on Linux from a Mac.
 
+- `hermes-plugin/`: a Hermes plugin (`ovenmitt_bridge`) with seven native `ovenmitt_vault_*` tools and a generic `ovenmitt` skill. `ovenmitt_vault_send` delivers to the current chat only, through the platform adapter's own `send_document` and `resolve_path`; the target is read off the sender, never taken from the model. The consumer credential is popped from the environment at load. Tests include a contract test against a real platform adapter inside the agent image (`hermes-plugin/tests/run-in-agent-image.sh`), and the denylist test now scans the bridge for any name but its harness's.
+
 ### Changed
 - The Python package's `mcp` dependency is now the optional extra `ovenmitt[mcp]`; the base package (the client) depends on `httpx` only, so it installs beside an agent image's own MCP pin. Without the extra, `ovenmitt mcp` exits with an install hint. The agent image installs the extra.
 - BRIEF: `resolve_path` promoted to v1; Part B amended (the integration lives in three homes, and sends go through the platform adapter's own send interface).

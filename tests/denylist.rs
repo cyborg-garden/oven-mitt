@@ -52,6 +52,51 @@ fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
     }
 }
 
+/// The harness bridge necessarily names its harness, and nothing else: no
+/// platform (it learns the platform from the sender at run time), no
+/// provider, licence or community. Its tests are not scanned, because the
+/// contract test drives a real platform adapter by name.
+const BRIDGE_SCAN: &[&str] = &["hermes-plugin/plugin", "hermes-plugin/skill"];
+const BRIDGE_ALLOWED: &[&str] = &["hermes"];
+
+#[test]
+fn bridge_names_no_platform_provider_or_licence() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    for s in BRIDGE_SCAN {
+        let p = root.join(s);
+        if p.exists() {
+            walk(&p, &mut files);
+        }
+    }
+    assert!(
+        files.len() >= 4,
+        "bridge scan found too few files: {}",
+        files.len()
+    );
+    let mut hits = Vec::new();
+    for f in &files {
+        let Ok(text) = std::fs::read_to_string(f) else {
+            continue;
+        };
+        let lower = text.to_lowercase();
+        for term in DENYLIST.iter().filter(|t| !BRIDGE_ALLOWED.contains(t)) {
+            if lower.contains(term) {
+                hits.push(format!(
+                    "{} contains {term:?}",
+                    f.strip_prefix(root).unwrap().display()
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        hits,
+        Vec::<String>::new(),
+        "domain names found:\n{}",
+        hits.join("\n")
+    );
+}
+
 #[test]
 fn no_domain_names_in_code_config_or_tests() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

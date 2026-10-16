@@ -75,6 +75,8 @@ with c.resolve(info.handle, "team-chat", "chat:group/team", credential) as r:
 
 Or let the model drive it through MCP: `ovenmitt mcp` serves eight tools — `vault_list_vaults`, `vault_list_destinations`, `vault_put`, `vault_stat`, `vault_list`, `vault_label`, `vault_delete`, `vault_export` — and nothing that returns content.
 
+For Hermes agents, [`hermes-plugin/`](hermes-plugin/README.md) registers native `ovenmitt_vault_*` tools instead (no MCP subprocess), including `ovenmitt_vault_send`, which delivers an object to the current chat through the platform's own sender.
+
 ## Operator guide
 
 ### Configuration

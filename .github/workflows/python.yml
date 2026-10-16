@@ -18,3 +18,5 @@ jobs:
       - uses: astral-sh/setup-uv@v5
       - run: uv sync --project python --all-extras
       - run: uv run --project python pytest python/tests -q
+      # the bridge; its harness contract test skips without the harness installed
+      - run: uv run --project python pytest hermes-plugin/tests -q

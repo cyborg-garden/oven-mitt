@@ -1,0 +1,30 @@
+name: ovenmitt_bridge
+version: 0.2.0
+description: >-
+  Native tools for an ovenmitt write-only vault: put a file in, list, stat,
+  label, delete, list destinations, and send an object to the current chat
+  as an attachment. No tool returns content. Sends go through the harness's
+  own platform sender, to the chat this turn belongs to and nowhere else;
+  the daemon checks the destination and audits every send. The consumer
+  credential (OVENMITT_CONSUMER_CREDENTIAL) is popped from the environment
+  into this plugin's memory at load. Needs the `ovenmitt` Python package and
+  the daemon socket (OVENMITT_SOCKET, default /run/ovenmitt/ovenmitt.sock).
+author: ovenmitt contributors
+tools:
+  - ovenmitt_vault_put
+  - ovenmitt_vault_list
+  - ovenmitt_vault_stat
+  - ovenmitt_vault_label
+  - ovenmitt_vault_delete
+  - ovenmitt_vault_list_destinations
+  - ovenmitt_vault_send
+declared_capabilities:
+  tools:
+    - ovenmitt_vault_put
+    - ovenmitt_vault_list
+    - ovenmitt_vault_stat
+    - ovenmitt_vault_label
+    - ovenmitt_vault_delete
+    - ovenmitt_vault_list_destinations
+    - ovenmitt_vault_send
+  network: false
