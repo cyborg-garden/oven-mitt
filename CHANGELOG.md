@@ -4,6 +4,13 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 
 ## [Unreleased]
 
+### Added
+- `VaultClient.resolve_path(handle, destination, target, credential, filename)`: resolves into a `memfd` and yields a one-shot path (a symlink named `filename` in a private temp dir) for senders that only take a filename. Closed and removed when the `with` block ends. Linux only; `docker/Dockerfile.pytest` runs the Python tests on Linux from a Mac.
+
+### Changed
+- The Python package's `mcp` dependency is now the optional extra `ovenmitt[mcp]`; the base package (the client) depends on `httpx` only, so it installs beside an agent image's own MCP pin. Without the extra, `ovenmitt mcp` exits with an install hint. The agent image installs the extra.
+- BRIEF: `resolve_path` promoted to v1; Part B amended (the integration lives in three homes, and sends go through the platform adapter's own send interface).
+
 ### Fixed
 - Python test fixture put the daemon socket under pytest's `tmp_path`, which on macOS exceeds the 104-byte Unix socket path limit; the socket now lives in a short `/tmp` dir and the fixture reports the daemon's stderr if it dies. The daemon itself now names the platform limit instead of surfacing a bare ENAMETOOLONG.
 

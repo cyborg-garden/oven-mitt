@@ -56,7 +56,7 @@ docker compose -f docker/docker-compose.yml exec ovenmittd \
 
 ### Python usage
 
-From inside the agent container, with the Python package installed:
+From inside the agent container, with the Python package installed (`pip install ovenmitt` for the client; `pip install 'ovenmitt[mcp]'` adds the MCP server):
 
 ```python
 from ovenmitt import VaultClient
@@ -139,7 +139,14 @@ The rules and the thresholds for the review config live in an optional `review.t
 - **Labels and names are visible to the agent.** Don't put content in them.
 - **Senders** resolve with the credential and name both the declared destination and the concrete target: `client.resolve(handle, "team-chat", "chat:group/team", cred)`. The daemon checks the target against the destination's pattern and audits both. It trusts you to declare truthfully; that trust is the threat model's boundary.
 - **Every error is a code** from a closed set (`NOT_FOUND`, `TARGET_NOT_ALLOWED`, `EXISTS`, …) with a fixed message. Match on `e.code`.
-- Tools that only accept a filename: a future `resolve_path` will hand them a `/dev/fd/N` backed by memory. Until then, stream.
+- **Senders that only take a filename** (most chat platforms' upload APIs take a path) use `resolve_path`, which yields a one-shot path backed by memory:
+
+  ```python
+  with client.resolve_path(handle, "team-chat", "chat:group/team", cred, "report.txt") as path:
+      platform.send_file(chat, path)   # same process; the path dies with the block
+  ```
+
+  The bytes go into a `memfd` (RAM, no filesystem), and the path is a symlink named `report.txt` in a private temp dir, so the receiver sees a real name and MIME type. Pass the path to in-process code, not a subprocess: it points at `/proc/self/fd/N`, which is close-on-exec. Linux only.
 
 ## Limitations
 
@@ -164,6 +171,7 @@ These are known limitations, by design.
 ```sh
 cargo clippy --all-targets -- -D warnings && cargo test   # Rust: unit + in-process daemon tests
 uv run --project python pytest python/tests -q            # Python, against the built binary
+docker build -f docker/Dockerfile.pytest -t ovenmitt-pytest . && docker run --rm ovenmitt-pytest   # Python on Linux (resolve_path) from a Mac
 uv run --project python pytest tests-e2e -q               # compose stack; needs Docker
 ```
 

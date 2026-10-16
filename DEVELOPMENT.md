@@ -66,7 +66,7 @@ oven-mitt/
 │   ├── api_*.rs               one file per PRD area
 │   └── audit_*.rs
 ├── python/
-│   ├── pyproject.toml         package `ovenmitt`, Python ≥ 3.11, deps: httpx, mcp
+│   ├── pyproject.toml         package `ovenmitt`, Python ≥ 3.11, deps: httpx; extra `mcp`
 │   ├── src/ovenmitt/
 │   │   ├── __init__.py        VaultClient, types, OvenmittError
 │   │   ├── client.py
@@ -128,7 +128,7 @@ Not used, deliberately: a JCS crate (§6 explains why we don't need one), `nix` 
 | Package | Role |
 |---|---|
 | `httpx` | HTTP over UDS: `httpx.HTTPTransport(uds=path)`; streaming request and response bodies |
-| `mcp` (2.x) | official SDK; `MCPServer` (what 1.x called `FastMCP`) for the server |
+| `mcp` (2.x) | official SDK; `MCPServer` (what 1.x called `FastMCP`) for the server. An optional extra (`ovenmitt[mcp]`) since 2026-10-16: agent images pin their own MCP version, and the client must install beside it |
 | `pytest`, `pytest-asyncio` (dev) | |
 
 Built with `uv`; `uv build` produces the wheel the agent image installs.
@@ -241,7 +241,7 @@ In order, each step fatal on failure with a one-line reason on stderr:
 |---|---|---|
 | Rust unit (`#[cfg(test)]`) | `cargo test` on the Mac, or my shell | grammars (names, filenames, durations, sizes), pattern matcher (AT-26), handle format, chunked AEAD round-trip + truncation/reorder rejection, canonical JSON + no-floats, chain verify + tamper matrix (AT-12), review rules at/under threshold (AT-24), credential token format |
 | Rust integration (`tests/`) | `cargo test`; daemon in-process on a temp socket; raw `hyper` client | every route and error code (AT-1, 5, 6, 7, 16, 25, 27), export confinement (AT-9, 10), TTL (AT-15), aborted streams (AT-14), at-rest sentinel scans (AT-21), refusal durability (AT-23), credential lifecycle (AT-17), `expose_names` (AT-22), config validation and key-refusal (AT-18, 19) |
-| Python (`python/tests`) | `pytest` against a daemon started by the Rust test helper binary or a local `ovenmitt daemon` | client parity with the wire, MCP tool list (SI-13 / AT-2), `vault_put` unlink-after-201, `list_vaults` on MCP (AT-29) |
+| Python (`python/tests`) | `pytest` against a daemon started by the Rust test helper binary or a local `ovenmitt daemon`; on a Mac, `docker/Dockerfile.pytest` runs the same suite on Linux | client parity with the wire, MCP tool list (SI-13 / AT-2), `vault_put` unlink-after-201, `list_vaults` on MCP (AT-29), `resolve_path` (Linux only: `memfd_create`), client import without `mcp` |
 | End-to-end (`tests-e2e/`) | `pytest` on the Mac driving `docker compose -f docker/docker-compose.test.yml` | store absent from agent container (AT-8), no TCP listener (AT-20), `verify`/`review` via `docker exec` (AT-11), full sentinel sweep across containers (AT-13), denylist grep (AT-28) |
 
 CI runs all four on every push to `tumu`, as three workflows (`rust`, `python`, `e2e`) so each gets a README badge; e2e takes a few minutes because it builds both images. The Mac runs all four before any tag.

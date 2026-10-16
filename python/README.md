@@ -12,7 +12,11 @@ c.export(info.handle, "archive", "out.txt")
 with c.resolve(info.handle, "team-chat", "chat:group/team", credential) as r:
     for chunk in r.stream:                                # consumer tool code only
         ...
+with c.resolve_path(info.handle, "team-chat", "chat:group/team", credential, "out.txt") as path:
+    send_file(path)                                       # one-shot memfd path, Linux only
 ```
+
+`pip install ovenmitt` installs the client, which depends only on `httpx`. `pip install 'ovenmitt[mcp]'` adds the MCP server.
 
 `ovenmitt mcp --socket /run/ovenmitt/ovenmitt.sock` serves the eight metadata-only tools over stdio.
 

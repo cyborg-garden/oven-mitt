@@ -135,6 +135,8 @@ The end-to-end test with a real agent is in Part B (§B4).
 
 Docker only. Rust daemon, Python client library, MCP face, operator admin CLI (audit `verify` and `review`), and a compose file. Together with the Part B PR, this makes the v1 deliverable.
 
+**Added to v1 (2026-10-16): `resolve_path`.** Platform adapters send files by path, so a sender that goes through the harness's own send interface needs bytes that look like a file. `resolve_path(handle, destination, target, credential, filename)` resolves into a `memfd` (an anonymous, RAM-backed file on no filesystem) and yields a symlink named `filename`, in a private temp dir, pointing at `/proc/self/fd/N`. The name matters because adapters derive the attachment name and MIME type from the path. The path is one-shot: it lives for one `with` block, which is one send call, and then the descriptor is closed and the dir removed. No daemon change; the daemon checks and audits it like any `resolve`. Linux only. This supersedes the spawn-a-child-with-`/dev/fd/N` sketch in §10.2. The Python package's `mcp` dependency also became an optional extra (`ovenmitt[mcp]`), so the client installs beside whatever MCP version an agent image pins.
+
 ### 10.2 Future: possible features
 
 None of these is needed to start. Each is recorded so v1 doesn't rule it out.
@@ -149,7 +151,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
   - no detection of paraphrased, translated, summarised or encoded content
   - window size, normalisation (case, whitespace, punctuation, Unicode forms such as macrons) and the match threshold all need careful tuning
 - **Sealed producers:** wrappers around a specific tool or API with no plain-stdout mode, so the pipe can't be forgotten.
-- **`resolve_path`:** for consumer tools that only accept a filename. The library resolves into a `memfd` (an anonymous RAM-backed file that never appears on any filesystem) and spawns the tool with the descriptor inherited and `/dev/fd/N` as the path. Looks like a file, exists only for that child process, nothing on disk to race or `cat`, no daemon support, no TCP. (Replaces the earlier "signed localhost URLs" idea, which would have needed a TCP listener.) A FIFO in the socket volume is the fallback for already-running daemons, kept out until something needs it.
+- ~~**`resolve_path`**~~: moved to v1 on 2026-10-16, as an in-process named symlink to the `memfd` rather than a spawned child (§10.1). A FIFO in the socket volume remains the fallback for already-running daemons, kept out until something needs it.
 
 ## 11. Open items
 
@@ -193,35 +195,41 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 32 | Consumer credentials are scoped to a list of vaults; the vault's destination list is the only allowlist |
 | 33 | `list-vaults` exists; there is no default vault |
 | 34 | In Docker the peer UID can't identify a caller; credential-or-not is the only distinction. `SO_PEERCRED` is the local-mode fix, future |
+| 35 | (2026-10-16) `resolve_path` is v1: a one-shot `memfd` behind a named symlink, valid for one send call (§10.1) |
+| 36 | (2026-10-16) `mcp` is an optional extra of the Python package; the base package depends on `httpx` only |
+| 37 | (2026-10-16) Native harness tools that wrap the vault carry an `ovenmitt_vault_*` prefix, because a native tool has no server namespace and a harness may already call something else "the vault". The MCP face keeps `vault_*` (decision 19): its server namespace already says ovenmitt |
 
-# Part B — Harness integration (separate PR to Swarm Map)
+# Part B — Harness integration (Hermes and Swarm Map)
 
-*This part is kept separate so that Part A stays harness-independent. Nothing here ships in this repo. It all ships as **one PR to Swarm Map**, because it depends on Hermes internals and on how Swarm Map deploys agents. It's recorded here because the v1 deliverable needs both halves, and the core must be designed so this integration is straightforward.*
+*This part is kept separate so that Part A stays harness-independent. It's recorded here because the v1 deliverable needs both halves, and the core must be designed so this integration is straightforward.*
 
-## B1. What the PR contains
+*Amended 2026-10-16 after a design review. The original plan put all Hermes-specific code in one Swarm Map PR, with `vault_send` calling signal-cli directly. Both changed; the original text survives in git history.*
 
-All Hermes-specific code is packaged as one Hermes plugin (a Python folder with `register(ctx)`), plus deployment wiring:
+## B1. Where the integration lives (amended: three homes)
 
-1. **Producer tool(s):** e.g. the Papa Reo API call, streaming its response straight into `vault.put()` through the library. The agent calls the tool and gets back only a handle.
-2. **`vault_send(handle)`:** sends a vault object to the current chat (see B3).
-3. **Consumer credential:** given only to `vault_send`. It is never in the terminal tool's environment or on PATH.
-4. **Wiring:** the daemon as a compose service, with its socket shared into the agent container; `vault_send` gets the consumer credential.
+1. **Swarm Map PR, core wiring only:** the daemon as a per-agent compose service with its socket shared into the agent container, the generated operator config, custody of the consumer credential, and a settings card. Secret custody is what earns a place in Swarm Map itself.
+2. **`hermes-plugin/` in this repo, the generic bridge:** a Hermes plugin (`register(ctx)`) that holds the consumer credential and registers native tools (`ovenmitt_vault_put`, `_list`, `_stat`, `_label`, `_delete`, `_list_destinations`, `_send`; no export), plus a generic `ovenmitt` skill. It has nothing domain-specific in it (decision 21), and it lives beside the core so the two version together.
+3. **Producers in their own repos:** for example a transcription plugin that streams an API's response into `vault.put()` and gets back only a handle.
+
+The consumer credential is given only to the bridge. It arrives as a compose `environment:` entry, never a file, and the plugin pops it out of the process environment into a closure at `register()`, so no terminal child inherits it. Residual, accepted and documented: `/proc/<gateway-pid>/environ` is readable by the same uid.
 
 Later Swarm Map work: a vault/destination config API behind its UI, and an audit view with `review` findings on the dashboard. Deferred: inbound attachment diversion (chat uploads → vault, bypassing the agent).
 
 ## B2. Hermes facts (from source, 2026-10-12)
 
-- Hermes has **no agent-callable send tool**, by design. The agent delivers files only by writing `MEDIA:/path` tags in its reply, and only to the current chat. That's why we ship `vault_send`, registered via `ctx.register_tool`.
-- Signal goes through an external signal-cli daemon (JSON-RPC). Hermes's adapter attaches files by path, but signal-cli also accepts **RFC 2397 data URIs** (`data:<mime>;filename=<name>;base64,…`), so `vault_send` calls signal-cli directly and never writes a file.
+- Hermes has **no agent-callable send tool**, by design. The agent delivers files only by writing `MEDIA:/path` tags in its reply, and only to the current chat. That's why we ship `ovenmitt_vault_send`, registered via `ctx.register_tool`.
+- *(Amended 2026-10-16.)* Every platform adapter has the same generic send interface, `send_document(chat_id, file_path, caption=…)`, and carries `self.platform`. The adapters read the file in-process: Signal's inlines it as an RFC 2397 data URI to signal-cli, and Discord's and Telegram's upload it directly. So one mechanism covers every platform: hand the adapter a `resolve_path` path. There is no per-platform code of ours, and no signal-cli special case.
 - Sending outside the agent's reply does not write content to session history. Hermes's own `send_message` mirror records only a placeholder such as `[Sent document attachment]`.
 - `pre_llm_call` **cannot block**; it can only add context. Hooks that can intervene are `pre_tool_call` (block), `transform_tool_result` (rewrite a tool result) and `transform_llm_output` (rewrite the reply). No Hermes hook can block a whole LLM request.
 
-## B3. `vault_send` flow
+## B3. `ovenmitt_vault_send` flow (amended)
 
-1. Read the current platform and chat from Hermes's session context.
-2. `resolve(handle, "<destination name>", "signal:<chat>")` using the consumer credential. The daemon checks the target against that destination's pattern and audits both.
-3. Stream the bytes to signal-cli as a data-URI attachment.
-4. Return only `sent ✓` to the LLM.
+1. Read the current platform and chat from Hermes's session context, **never from the model's arguments** (the tool has no target argument; tested). Build `functools.partial(adapter.send_document, chat_id)` from the live adapter.
+2. The bridge's `vault_send(handle, send)` accepts only that shape and derives the claim from the very callable that will send: destination = the adapter's platform, target = `<platform>/<percent-encoded chat id>`.
+3. `with client.resolve_path(handle, destination, target, credential, filename) as p: await send(p)`. The daemon checks the target against that destination's pattern and audits both. The path dies with the block.
+4. Return only `sent ✓` and metadata to the LLM.
+
+v1 trusts the bridge to declare truthfully. The control that removes that trust is the content check behind an LLM proxy (§10.2, B7).
 
 ## B4. End-to-end acceptance test (one Hermes agent)
 
@@ -240,14 +248,15 @@ Reference producer: a Papa Reo API call (Part C). Any tool whose output must sta
 ## B5. Open items
 
 - **Known gap:** v1 prevents the agent from reading vault content but does not *detect* it. Content that reaches context by another route (e.g. the user pasting it into chat) goes unnoticed.
-- Does signal-cli keep a copy of sent attachments in its data dir? If it does, that copy needs the same protection or cleanup.
+- ~~Does signal-cli keep a copy of sent attachments in its data dir?~~ Checked 2026-10-16: no. signal-cli streams uploads straight from the source (a data URI is decoded in memory); only *received* attachments go to its attachment store. Re-check against the signal-cli version a deployment actually runs.
 
 ## B6. Decisions
 
 | # | Decision |
 |---|---|
-| B1 | All Hermes-specific code (producers, `vault_send`, wiring) ships as one Swarm Map PR |
-| B2 | Signal sends use signal-cli data-URI attachments; no temp files |
+| B1 | ~~All Hermes-specific code ships as one Swarm Map PR.~~ Amended 2026-10-16: three homes. Core wiring and credential custody in Swarm Map; the generic bridge in `hermes-plugin/` here; producers in their own repos (B1) |
+| B2 | ~~Signal sends use signal-cli data-URI attachments.~~ Amended 2026-10-16: every send goes through the platform adapter's own `send_document`, given a one-shot `resolve_path` path |
+| B3 | The send target comes from session context only, never from model arguments |
 
 ## B7. Future: possible additions
 

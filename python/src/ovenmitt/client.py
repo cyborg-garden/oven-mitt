@@ -10,7 +10,11 @@ from __future__ import annotations
 
 import hashlib
 import os
+import shutil
+import tempfile
+import unicodedata
 from collections.abc import Iterable, Iterator, Sequence
+from contextlib import contextmanager
 from typing import IO, Any, BinaryIO
 from urllib.parse import quote
 
@@ -35,6 +39,24 @@ def _iter_file(f: IO[bytes]) -> Iterator[bytes]:
         if not chunk:
             return
         yield chunk
+
+
+def _check_filename(name: str) -> str:
+    """The name a ``resolve_path`` file is presented under.
+
+    One path segment the receiving tool can derive a name and MIME type
+    from: no separator, no control characters, no leading dot (no hidden
+    files, no ``..``), at most 255 bytes like any filename.
+    """
+    if (
+        not name
+        or name.startswith(".")
+        or "/" in name
+        or any(unicodedata.category(c).startswith("C") for c in name)
+        or len(name.encode()) > 255
+    ):
+        raise ValueError(f"unusable filename for resolve_path: {name!r}")
+    return name
 
 
 class Resolved:
@@ -285,3 +307,43 @@ class VaultClient:
             finally:
                 ctx.__exit__(None, None, None)
         return Resolved(response, ctx)
+
+    @contextmanager
+    def resolve_path(
+        self, handle: str, destination: str, target: str, credential: str, filename: str
+    ) -> Iterator[str]:
+        """``resolve`` for tools that only take a filename.
+
+        The plaintext goes into a ``memfd`` (anonymous, RAM-backed, on no
+        filesystem), and the yielded path is a symlink named ``filename``
+        in a private temp dir pointing at ``/proc/self/fd/<n>``, so the
+        tool sees a real name and extension. The path is one-shot: it is
+        valid only inside the ``with`` block (one send call), and on exit
+        the descriptor is closed and the dir removed, exception or not.
+
+        ``/proc/self`` means only this process can follow the link, and
+        the descriptor is close-on-exec, so hand the path to in-process
+        code, not a subprocess. The whole object sits in memory while the
+        block runs. Linux only, because ``memfd_create`` is.
+        """
+        name = _check_filename(filename)
+        memfd_create = getattr(os, "memfd_create", None)
+        if memfd_create is None:
+            raise NotImplementedError("resolve_path needs os.memfd_create (Linux only)")
+        # Arguments are checked before resolving, so a bad call costs no
+        # resolve and leaves no audit entry behind.
+        fd = memfd_create("ovenmitt", os.MFD_CLOEXEC)
+        tmpdir: str | None = None
+        try:
+            with self.resolve(handle, destination, target, credential) as r:
+                with os.fdopen(fd, "wb", closefd=False) as f:
+                    for chunk in r.stream:
+                        f.write(chunk)
+            tmpdir = tempfile.mkdtemp(prefix="ovenmitt-")  # mode 0700
+            path = os.path.join(tmpdir, name)
+            os.symlink(f"/proc/self/fd/{fd}", path)
+            yield path
+        finally:
+            os.close(fd)
+            if tmpdir is not None:
+                shutil.rmtree(tmpdir, ignore_errors=True)

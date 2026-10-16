@@ -19,8 +19,15 @@ def main(argv: list[str] | None = None) -> int:
     mcp_p.add_argument("--socket", default=DEFAULT_SOCKET, help="daemon socket path")
     args = parser.parse_args(argv)
     if args.command == "mcp":
-        from .mcp import main as mcp_main
-
+        try:
+            from .mcp import main as mcp_main
+        except ImportError:
+            # The base package is the client only; the MCP SDK is an extra.
+            print(
+                "ovenmitt mcp needs the MCP SDK: pip install 'ovenmitt[mcp]'",
+                file=sys.stderr,
+            )
+            return 1
         mcp_main(args.socket)
         return 0
     parser.print_usage(sys.stderr)
