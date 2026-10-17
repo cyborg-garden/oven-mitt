@@ -21,6 +21,10 @@ Some outputs must never pass through your context, because the model provider co
 
 Nothing returns content. That is the point, not a gap.
 
+**Vault names.** Never guess one. Usually there is only one vault, and then you can leave `vault` out of every call. `ovenmitt_vault_list` with no `vault` returns every vault's name along with its objects.
+
+**Putting a file.** Write it somewhere you are allowed to write, such as your working directory or home directory. A shared temp directory like `/tmp` may be off-limits for writes. Then call `ovenmitt_vault_put` with its path and `remove_source: true`, so no copy is left behind.
+
 ## Rules
 
 1. **A handle is the deliverable.** When a tool hands you one, the job is to get it to the person, not to know what's in it. Send it, and say you've sent it. Don't summarise, quote or guess at it.
@@ -32,4 +36,4 @@ Nothing returns content. That is the point, not a gap.
 
 ## Resending
 
-Objects stay in the vault until they expire (`expires_at` in `ovenmitt_vault_list`). If someone asks for a file again, list the vaults (`ovenmitt_vault_list` with no vault lists them all), find the object by its labels or time, and send it again with `ovenmitt_vault_send`. Pass a filename label as `filename` so it arrives under the same name.
+Objects stay in the vault until they expire (`expires_at` in `ovenmitt_vault_list`). If someone asks for a file again, call `ovenmitt_vault_list` with no vault, find the object by its labels or time, and send it again with `ovenmitt_vault_send`. Pass a filename label as `filename` so it arrives under the same name.

@@ -75,7 +75,10 @@ SCHEMAS: dict[str, dict[str, Any]] = {
             "type": "object",
             "properties": {
                 "path": {"type": "string", "description": "Path of the file to put."},
-                "vault": {"type": "string", "description": "Vault name (objects you already hold show theirs)."},
+                "vault": {
+                    "type": "string",
+                    "description": "Vault name. Omit it when there is only one vault; ovenmitt_vault_list shows the names.",
+                },
                 "labels": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -84,12 +87,15 @@ SCHEMAS: dict[str, dict[str, Any]] = {
                 "mime": {"type": "string", "description": "Optional MIME type, e.g. text/plain."},
                 "remove_source": {"type": "boolean", "description": "Delete the original after the put."},
             },
-            "required": ["path", "vault"],
+            "required": ["path"],
         },
     },
     "ovenmitt_vault_list": {
         "name": "ovenmitt_vault_list",
-        "description": "List vault objects: handles and metadata only. Omit vault to list every vault.",
+        "description": (
+            "List vault objects: handles and metadata only. Omit vault to get every vault's "
+            "name and all their objects."
+        ),
         "parameters": {
             "type": "object",
             "properties": {"vault": {"type": "string", "description": "Optional vault name."}},
@@ -134,8 +140,8 @@ SCHEMAS: dict[str, dict[str, Any]] = {
         ),
         "parameters": {
             "type": "object",
-            "properties": {"vault": {"type": "string", "description": "Vault name."}},
-            "required": ["vault"],
+            "properties": {"vault": {"type": "string", "description": "Vault name; omit it when there is only one."}},
+            "required": [],
         },
     },
     "ovenmitt_vault_send": {
@@ -227,6 +233,20 @@ class _Bridge:
         except (OSError, httpx.TransportError):
             return _refused("UNAVAILABLE", "the ovenmitt daemon is not reachable")
 
+    def _vault_or_only(self, given: Any) -> str:
+        """The vault named, or the only one there is. With several and none
+        named, refuse and name them: guessing is how a put lands nowhere."""
+        if given:
+            return str(given)
+        names = [v.name for v in self._c().vaults()]
+        if len(names) == 1:
+            return names[0]
+        raise OvenmittError(
+            "INVALID_REQUEST",
+            "name a vault: " + (", ".join(names) if names else "no vaults are configured"),
+            400,
+        )
+
     def put(self, args: dict[str, Any], **_: Any) -> str:
         path = str(args.get("path") or "")
         if not os.path.isfile(path):
@@ -239,7 +259,7 @@ class _Bridge:
             lambda: self._c()
             .put_path(
                 path,
-                str(args.get("vault") or ""),
+                self._vault_or_only(args.get("vault")),
                 remove_source=bool(args.get("remove_source")),
                 mime=args.get("mime") or None,
                 labels=list(args.get("labels") or ()),
@@ -248,7 +268,15 @@ class _Bridge:
         )
 
     def list(self, args: dict[str, Any], **_: Any) -> str:
-        return self._call(lambda: [o.to_dict() for o in self._c().list(args.get("vault") or None)])
+        vault = args.get("vault") or None
+        if vault:
+            return self._call(lambda: [o.to_dict() for o in self._c().list(str(vault))])
+
+        def every_vault() -> dict[str, Any]:
+            names = [v.name for v in self._c().vaults()]
+            return {"vaults": names, "objects": [o.to_dict() for n in names for o in self._c().list(n)]}
+
+        return self._call(every_vault)
 
     def stat(self, args: dict[str, Any], **_: Any) -> str:
         return self._call(lambda: self._c().stat(str(args.get("handle") or "")).to_dict())
@@ -269,7 +297,7 @@ class _Bridge:
 
     def list_destinations(self, args: dict[str, Any], **_: Any) -> str:
         return self._call(
-            lambda: [d.__dict__ for d in self._c().destinations(str(args.get("vault") or ""))]
+            lambda: [d.__dict__ for d in self._c().destinations(self._vault_or_only(args.get("vault")))]
         )
 
     def send(self, args: dict[str, Any], **_: Any) -> str:

@@ -238,6 +238,49 @@ def _link(link, target):
     return link
 
 
+class _Vaults:
+    """Just the metadata calls, for the vault-defaulting tests."""
+
+    def __init__(self, names):
+        self.names = names
+        self.puts = []
+
+    def vaults(self):
+        return [types.SimpleNamespace(name=n) for n in self.names]
+
+    def list(self, vault=None):
+        return [types.SimpleNamespace(to_dict=lambda v=vault: {"handle": "v_0123456789ab", "vault": v})]
+
+    def destinations(self, vault):
+        return [types.SimpleNamespace(name="x", kind="send", vault=vault)]
+
+    def put_path(self, path, vault, **kw):
+        self.puts.append(vault)
+        return types.SimpleNamespace(to_dict=lambda: {"handle": "v_0123456789ab", "vault": vault})
+
+
+def test_one_vault_needs_no_name(plugin, tmp_path):
+    b = plugin._Bridge("/nonexistent.sock", None)
+    fake = _Vaults(["private"])
+    b._client = fake
+    f = tmp_path / "out.txt"
+    f.write_text("x")
+    assert json.loads(b.put({"path": str(f)}))["vault"] == "private"
+    listed = json.loads(b.list({}))
+    assert listed["vaults"] == ["private"] and listed["objects"][0]["vault"] == "private"
+    assert json.loads(b.list_destinations({}))[0]["name"] == "x"
+
+
+def test_several_vaults_and_no_name_is_refused_with_the_names(plugin, tmp_path):
+    b = plugin._Bridge("/nonexistent.sock", None)
+    b._client = _Vaults(["a", "b"])
+    f = tmp_path / "out.txt"
+    f.write_text("x")
+    out = json.loads(b.put({"path": str(f)}))
+    assert out["error"]["code"] == "INVALID_REQUEST" and "a, b" in out["error"]["message"]
+    assert json.loads(b.list({}))["vaults"] == ["a", "b"]
+
+
 def test_send_without_credential_is_not_configured(plugin):
     b = plugin._Bridge("/nonexistent.sock", None)
     out = json.loads(b.send({"handle": "v_0123456789ab"}))
