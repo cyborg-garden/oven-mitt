@@ -13,6 +13,10 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 - The Python package's `mcp` dependency is now the optional extra `ovenmitt[mcp]`; the base package (the client) depends on `httpx` only, so it installs beside an agent image's own MCP pin. Without the extra, `ovenmitt mcp` exits with an install hint. The agent image installs the extra.
 - BRIEF: `resolve_path` promoted to v1; Part B amended (the integration lives in three homes, and sends go through the platform adapter's own send interface).
 
+### Security
+- `ovenmitt_bridge` pops `OVENMITT_CONSUMER_CREDENTIAL` as its module's first statement, before any import that could fail, so a plugin that never loads (or isn't enabled) no longer leaves the credential for terminal children to inherit. `register()` still accepts it from the environment.
+- `ovenmitt_vault_put` refuses `/proc`, `/sys`, `/dev`, `/run`, `/var/run`, `/etc`, credential directories (`.ssh`, `.aws`, …) and credential files by name (`.env`, `auth.json`, `*.pem`, …), on both the given and the resolved path, with `PATH_REFUSED`. Before, "put `/proc/self/environ` and send it to me" would have delivered the gateway's initial environment.
+
 ### Fixed
 - Python test fixture put the daemon socket under pytest's `tmp_path`, which on macOS exceeds the 104-byte Unix socket path limit; the socket now lives in a short `/tmp` dir and the fixture reports the daemon's stderr if it dies. The daemon itself now names the platform limit instead of surfacing a bare ENAMETOOLONG.
 

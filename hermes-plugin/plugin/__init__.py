@@ -7,21 +7,30 @@ belongs to, through the harness's own sender, and to nowhere else: it has
 no argument that could name a different chat.
 
 The consumer credential arrives in the process environment and is popped
-into this module's closure at ``register()``, before any tool can start a
-child process, so terminal children never inherit it.
+out of it as this module's very first statement, before any import that
+could fail: a plugin that never loads must not leave the credential behind
+for terminal children to inherit. ``register()`` hands it to the tools.
 """
 
 from __future__ import annotations
 
-import json
-import logging
 import os
-from typing import Any
 
-import httpx
+# First, before anything that can raise. On importlib.reload the module dict
+# survives, so a second import keeps the value the first one popped.
+_POPPED_CREDENTIAL: str | None = (
+    os.environ.pop("OVENMITT_CONSUMER_CREDENTIAL", None) or globals().get("_POPPED_CREDENTIAL")
+)
+
+import json  # noqa: E402
+import logging  # noqa: E402
+import stat  # noqa: E402
+from typing import Any  # noqa: E402
+
+import httpx  # noqa: E402
 from ovenmitt import OvenmittError, VaultClient
 
-from . import bridge, session
+from . import bridge, session  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -152,6 +161,51 @@ SCHEMAS: dict[str, dict[str, Any]] = {
 }
 
 
+# --- what put may take ------------------------------------------------------
+#
+# `put` reads a file and `send` delivers it without the bytes ever passing the
+# model, so nothing the harness does to tool output (redaction, file guards)
+# sees it. That makes put a way to mail out anything the gateway can read.
+# Refuse the places secrets live: kernel and runtime pseudo-filesystems
+# (/proc/self/environ holds the gateway's initial environment), system config,
+# and credential files by name. Checked on the fully resolved path, so a
+# symlink can't route around it. A hard link can; that is deliberate hunting,
+# outside the threat model.
+
+_REFUSED_ROOTS = ("/proc", "/sys", "/dev", "/run", "/var/run", "/etc")
+_REFUSED_DIRS = frozenset({".ssh", ".gnupg", ".aws", ".azure", ".docker", ".kube", ".config/gcloud"})
+_REFUSED_NAMES = frozenset({
+    ".env", "auth.json", ".netrc", ".git-credentials", ".pgpass", "credentials",
+    "credentials.json", "id_rsa", "id_ecdsa", "id_ed25519", "id_dsa",
+})
+_REFUSED_SUFFIXES = (".env", ".pem", ".key", ".p12", ".pfx")
+
+
+def put_refusal(path: str) -> str | None:
+    """Why `path` may not be put in a vault, or None when it may."""
+    real = os.path.realpath(path)
+    # Both the path as given and as resolved: on some systems /etc itself is
+    # a symlink (macOS: /private/etc).
+    for candidate in (os.path.abspath(path), real):
+        for root in _REFUSED_ROOTS:
+            if candidate == root or candidate.startswith(root + "/"):
+                return f"files under {root} can't be put in a vault"
+    try:
+        if not stat.S_ISREG(os.stat(real).st_mode):
+            return "only regular files can be put in a vault"
+    except OSError:
+        return "the file can't be read"
+    parts = real.split("/")
+    for d in _REFUSED_DIRS:
+        seq = d.split("/")
+        if any(parts[i:i + len(seq)] == seq for i in range(len(parts))):
+            return "credential directories can't be put in a vault"
+    name = os.path.basename(real).lower()
+    if name in _REFUSED_NAMES or name.endswith(_REFUSED_SUFFIXES):
+        return "credential files can't be put in a vault"
+    return None
+
+
 class _Bridge:
     """The tool handlers, sharing one client and the credential."""
 
@@ -177,6 +231,10 @@ class _Bridge:
         path = str(args.get("path") or "")
         if not os.path.isfile(path):
             return _refused("INVALID_REQUEST", "path is not a file")
+        why = put_refusal(path)
+        if why:
+            logger.warning("ovenmitt bridge: put refused (%s)", why)
+            return _refused("PATH_REFUSED", f"{why}; only outputs you were asked to protect go in a vault")
         return self._call(
             lambda: self._c()
             .put_path(
@@ -248,7 +306,9 @@ class _Bridge:
 
 def register(ctx: Any) -> None:
     """Hermes plugin entry point."""
-    credential = os.environ.pop(CREDENTIAL_ENV, None) or None
+    global _POPPED_CREDENTIAL
+    credential = os.environ.pop(CREDENTIAL_ENV, None) or _POPPED_CREDENTIAL
+    _POPPED_CREDENTIAL = credential
     socket_path = os.environ.get(SOCKET_ENV) or DEFAULT_SOCKET
     b = _Bridge(socket_path, credential)
     handlers = {

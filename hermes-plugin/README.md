@@ -52,7 +52,7 @@ A platform with no destination gets a refusal, which is audited. The bridge is t
 
 ## Credential
 
-The deployer puts the consumer credential in the gateway's environment as `OVENMITT_CONSUMER_CREDENTIAL`, in a compose `environment:` entry, never a file. `register()` pops it out of `os.environ` into the plugin's memory before any tool runs, so terminal children never inherit it. `OVENMITT_SOCKET` sets the socket path (default `/run/ovenmitt/ovenmitt.sock`). Without a credential, the metadata tools still work and `send` reports `NOT_CONFIGURED`.
+The deployer puts the consumer credential in the gateway's environment as `OVENMITT_CONSUMER_CREDENTIAL`, in a compose `environment:` entry, never a file. The plugin pops it out of `os.environ` as its module's first statement, before any import that could fail, so terminal children never inherit it, even when the plugin fails to load or isn't enabled. Note that a process manager may keep its own copy (s6-overlay writes every container env var to `/run/s6/container_environment/`): the deployer has to lock that copy down too. `OVENMITT_SOCKET` sets the socket path (default `/run/ovenmitt/ovenmitt.sock`). Without a credential, the metadata tools still work and `send` reports `NOT_CONFIGURED`.
 
 Residuals, accepted and documented: the process's initial environment stays readable at `/proc/<gateway-pid>/environ` by the same uid, and the memfd is reachable at `/proc/<pid>/fd/N` while a send is in flight.
 
@@ -70,3 +70,7 @@ ctx.dispatch_tool("ovenmitt_vault_send", {"handle": h, "filename": "report.txt"}
 uv run --project python pytest hermes-plugin/tests -q   # macOS: daemon-backed tests skip (memfd is Linux-only)
 hermes-plugin/tests/run-in-agent-image.sh               # everything, inside a Hermes image, incl. a real adapter
 ```
+
+## What `ovenmitt_vault_put` refuses
+
+`put` plus `send` would deliver any file the gateway can read, without the bytes passing the model (so the harness's redaction never sees them). `put` therefore refuses, on the path as given and as resolved: anything under `/proc`, `/sys`, `/dev`, `/run`, `/var/run` and `/etc`; anything inside `.ssh`, `.gnupg`, `.aws`, `.azure`, `.docker`, `.kube` or `.config/gcloud`; and credential files by name (`.env` and `*.env`, `auth.json`, `.netrc`, `.git-credentials`, `.pgpass`, `credentials(.json)`, SSH private keys, `*.pem`, `*.key`, `*.p12`, `*.pfx`). The refusal code is `PATH_REFUSED`. A hard link to a secret elsewhere gets through; that is deliberate hunting, outside the threat model.

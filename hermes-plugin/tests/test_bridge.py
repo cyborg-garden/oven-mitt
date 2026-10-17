@@ -182,6 +182,62 @@ def test_register_pops_the_credential(plugin, monkeypatch):
         assert "ovm_deadbeef_secret" not in json.dumps(r["schema"])
 
 
+def test_credential_is_popped_at_import_before_register(monkeypatch):
+    # A plugin whose register() never runs (a later import fails, or it is
+    # installed but not enabled) must still not leave the credential behind.
+    from conftest import load_plugin
+
+    monkeypatch.setenv("OVENMITT_CONSUMER_CREDENTIAL", "ovm_popped_at_import")
+    fresh = load_plugin("ovenmitt_bridge_import_pop")
+    assert "OVENMITT_CONSUMER_CREDENTIAL" not in os.environ
+
+    class Ctx:
+        def register_tool(self, **kw):
+            pass
+
+    fresh.register(Ctx())
+    assert fresh._POPPED_CREDENTIAL == "ovm_popped_at_import"
+
+
+@pytest.mark.parametrize(
+    "make",
+    [
+        lambda tmp: "/proc/self/environ",
+        lambda tmp: "/etc/hosts",
+        lambda tmp: _file(tmp / ".env"),
+        lambda tmp: _file(tmp / "prod.env"),
+        lambda tmp: _file(tmp / "auth.json"),
+        lambda tmp: _file(tmp / ".ssh" / "config"),
+        lambda tmp: _file(tmp / "server.pem"),
+        lambda tmp: _link(tmp / "innocent.txt", _file(tmp / ".git-credentials")),
+    ],
+)
+def test_put_refuses_secret_places(plugin, tmp_path, make):
+    path = str(make(tmp_path))
+    if not os.path.isfile(path):
+        pytest.skip(f"{path} doesn't exist on this platform")
+    b = plugin._Bridge("/nonexistent.sock", None)
+    out = json.loads(b.put({"path": path, "vault": "private"}))
+    assert out["error"]["code"] == "PATH_REFUSED"
+    assert os.path.exists(path)
+
+
+def test_put_allows_an_ordinary_output(plugin, tmp_path):
+    path = _file(tmp_path / "transcript.txt")
+    assert plugin.put_refusal(str(path)) is None
+
+
+def _file(p):
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("x")
+    return p
+
+
+def _link(link, target):
+    link.symlink_to(target)
+    return link
+
+
 def test_send_without_credential_is_not_configured(plugin):
     b = plugin._Bridge("/nonexistent.sock", None)
     out = json.loads(b.send({"handle": "v_0123456789ab"}))
