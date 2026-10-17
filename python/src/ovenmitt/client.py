@@ -316,15 +316,18 @@ class VaultClient:
 
         The plaintext goes into a ``memfd`` (anonymous, RAM-backed, on no
         filesystem), and the yielded path is a symlink named ``filename``
-        in a private temp dir pointing at ``/proc/self/fd/<n>``, so the
-        tool sees a real name and extension. The path is one-shot: it is
-        valid only inside the ``with`` block (one send call), and on exit
-        the descriptor is closed and the dir removed, exception or not.
+        in a private temp dir pointing at ``/proc/<this pid>/fd/<n>``, so
+        the tool sees a real name and extension. The path is one-shot: it
+        is valid only inside the ``with`` block (one send call), and on
+        exit the descriptor is closed and the dir removed, exception or not.
 
-        ``/proc/self`` means only this process can follow the link, and
-        the descriptor is close-on-exec, so hand the path to in-process
-        code, not a subprocess. The whole object sits in memory while the
-        block runs. Linux only, because ``memfd_create`` is.
+        The link names this process's pid, not ``/proc/self``: a helper
+        process the sender hands the path to (same user, same container)
+        opens this very memfd, and anything else fails to open it. Either
+        way it can never be another process's file. A sender that opens the
+        path after the block has ended finds nothing. The whole object sits
+        in memory while the block runs. Linux only, because ``memfd_create``
+        is.
         """
         name = _check_filename(filename)
         memfd_create = getattr(os, "memfd_create", None)
@@ -341,7 +344,7 @@ class VaultClient:
                         f.write(chunk)
             tmpdir = tempfile.mkdtemp(prefix="ovenmitt-")  # mode 0700
             path = os.path.join(tmpdir, name)
-            os.symlink(f"/proc/self/fd/{fd}", path)
+            os.symlink(f"/proc/{os.getpid()}/fd/{fd}", path)
             yield path
         finally:
             os.close(fd)

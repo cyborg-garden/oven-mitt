@@ -283,6 +283,8 @@ class _Bridge:
             sender, loop = session.current_sender()
         except session.NoSession as e:
             return _refused("NO_CHAT", str(e))
+        except session.Unsupported as e:
+            return _refused("UNSUPPORTED", str(e))
 
         def go() -> dict[str, Any]:
             return bridge.vault_send(
@@ -302,15 +304,44 @@ class _Bridge:
         except bridge.ShapeRefused as e:
             logger.error("ovenmitt bridge: sender shape refused: %s", e)
             return _refused("SEND_FAILED", "this chat's sender is not supported")
+        except session.SendTimeout as e:
+            return _refused("SEND_TIMEOUT", f"{e}; the file may still have arrived, so check before resending")
+        except Exception as e:  # noqa: BLE001 - keep refusals in our own codes, never a raw traceback
+            logger.exception("ovenmitt bridge: send failed")
+            return _refused("SEND_FAILED", f"the send failed ({type(e).__name__})")
+
+
+# The registered tools' shared state, for send_readiness().
+_BRIDGE: _Bridge | None = None
+
+
+def send_readiness() -> str | None:
+    """Why ``ovenmitt_vault_send`` would refuse in the current turn, or None
+    when it can send. For other plugins in the same gateway: a producer
+    checks this before spending anything on output it then couldn't
+    deliver. Reads nothing but the bridge's own state and the session.
+    """
+    b = _BRIDGE
+    if b is None or not b._credential:
+        return "sending is not configured on this agent"
+    try:
+        sender, _ = session.current_sender()
+        bridge.claim_from(sender)
+    except (session.NoSession, session.Unsupported) as e:
+        return str(e)
+    except bridge.ShapeRefused:
+        return "this chat's sender is not supported"
+    return None
 
 
 def register(ctx: Any) -> None:
     """Hermes plugin entry point."""
-    global _POPPED_CREDENTIAL
+    global _POPPED_CREDENTIAL, _BRIDGE
     credential = os.environ.pop(CREDENTIAL_ENV, None) or _POPPED_CREDENTIAL
     _POPPED_CREDENTIAL = credential
     socket_path = os.environ.get(SOCKET_ENV) or DEFAULT_SOCKET
     b = _Bridge(socket_path, credential)
+    _BRIDGE = b
     handlers = {
         "ovenmitt_vault_put": b.put,
         "ovenmitt_vault_list": b.list,

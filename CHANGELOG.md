@@ -13,6 +13,13 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 - The Python package's `mcp` dependency is now the optional extra `ovenmitt[mcp]`; the base package (the client) depends on `httpx` only, so it installs beside an agent image's own MCP pin. Without the extra, `ovenmitt mcp` exits with an install hint. The agent image installs the extra.
 - BRIEF: `resolve_path` promoted to v1; Part B amended (the integration lives in three homes, and sends go through the platform adapter's own send interface).
 
+### Fixed
+- `resolve_path` links to `/proc/<pid>/fd/<n>` instead of `/proc/self/fd/<n>`. A sender that hands the path to a helper process used to make the helper open *its own* fd n, which could be a different file; now it opens this memfd, or fails.
+- `ovenmitt_vault_send` refuses adapters with no `send_document` of their own (`UNSUPPORTED`): the harness's base fallback posts a "couldn't deliver" notice and reports success, so every send looked delivered. A send that outlasts its timeout is cancelled and reported as `SEND_TIMEOUT` (it was reported as "daemon not reachable" and kept running), and any other sender error becomes `SEND_FAILED` instead of a raw harness error.
+
+### Added
+- `ovenmitt_bridge.send_readiness()`: why a send would be refused in the current turn, or None. For producers in the same gateway, to check before spending on output they couldn't deliver.
+
 ### Security
 - `ovenmitt_bridge` pops `OVENMITT_CONSUMER_CREDENTIAL` as its module's first statement, before any import that could fail, so a plugin that never loads (or isn't enabled) no longer leaves the credential for terminal children to inherit. `register()` still accepts it from the environment.
 - `ovenmitt_vault_put` refuses `/proc`, `/sys`, `/dev`, `/run`, `/var/run`, `/etc`, credential directories (`.ssh`, `.aws`, …) and credential files by name (`.env`, `auth.json`, `*.pem`, …), on both the given and the resolved path, with `PATH_REFUSED`. Before, "put `/proc/self/environ` and send it to me" would have delivered the gateway's initial environment.

@@ -325,6 +325,91 @@ def test_runner_schedules_on_the_gateway_loop(plugin):
         t.join(5)
 
 
+def test_send_timeout_cancels_and_says_so(plugin, monkeypatch):
+    monkeypatch.setattr(plugin.session, "SEND_TIMEOUT_S", 0.2)
+    loop = asyncio.new_event_loop()
+    t = threading.Thread(target=loop.run_forever, daemon=True)
+    t.start()
+    try:
+        state = {}
+
+        async def stuck():
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                state["cancelled"] = True
+                raise
+
+        with pytest.raises(plugin.session.SendTimeout):
+            plugin.session.runner_on(loop)(stuck())
+        for _ in range(50):
+            if state.get("cancelled"):
+                break
+            threading.Event().wait(0.02)
+        assert state.get("cancelled") is True
+    finally:
+        loop.call_soon_threadsafe(loop.stop)
+        t.join(5)
+
+
+def _base_adapter_module(monkeypatch):
+    """A stand-in for the harness's base adapter, whose send_document only
+    posts a "couldn't deliver" notice and reports success."""
+    base = types.ModuleType("gateway.platforms.base")
+
+    class BasePlatformAdapter:
+        async def send_document(self, chat_id, file_path, caption=None, **kwargs):
+            return types.SimpleNamespace(success=True, error=None)
+
+    base.BasePlatformAdapter = BasePlatformAdapter
+    platforms = types.ModuleType("gateway.platforms")
+    platforms.base = base
+    monkeypatch.setitem(sys.modules, "gateway.platforms", platforms)
+    monkeypatch.setitem(sys.modules, "gateway.platforms.base", base)
+    return BasePlatformAdapter
+
+
+def test_adapter_without_its_own_send_document_is_refused(plugin, fake_gateway, monkeypatch):
+    Base = _base_adapter_module(monkeypatch)
+
+    class TextOnly(Base):
+        platform = Platform(PLATFORM)
+
+    class Uploads(Base):
+        platform = Platform(PLATFORM)
+
+        async def send_document(self, chat_id, file_path, caption=None, **kwargs):
+            return types.SimpleNamespace(success=True, error=None)
+
+    (key,) = fake_gateway.runner.adapters
+    fake_gateway.runner.adapters[key] = TextOnly()
+    b = plugin._Bridge("/nonexistent.sock", "ovm_x")
+    out = json.loads(b.send({"handle": "v_0123456789ab"}))
+    assert out["error"]["code"] == "UNSUPPORTED"
+    fake_gateway.runner.adapters[key] = Uploads()
+    assert plugin.session.current_sender()[0].func.__self__ is fake_gateway.runner.adapters[key]
+
+
+def test_unexpected_sender_errors_stay_in_our_codes(plugin, fake_gateway, monkeypatch):
+    def boom(*a, **k):
+        raise RuntimeError("adapter exploded with /some/path")
+
+    monkeypatch.setattr(plugin.bridge, "vault_send", boom)
+    b = plugin._Bridge("/nonexistent.sock", "ovm_x")
+    out = json.loads(b.send({"handle": "v_0123456789ab"}))
+    assert out["error"]["code"] == "SEND_FAILED"
+    assert "/some/path" not in json.dumps(out)
+
+
+def test_send_readiness(plugin, fake_gateway, monkeypatch):
+    monkeypatch.setattr(plugin, "_BRIDGE", None)
+    assert "not configured" in plugin.send_readiness()
+    monkeypatch.setattr(plugin, "_BRIDGE", plugin._Bridge("/nonexistent.sock", "ovm_x"))
+    assert plugin.send_readiness() is None
+    del fake_gateway.env["HERMES_SESSION_CHAT_ID"]
+    assert "not bound to a chat" in plugin.send_readiness()
+
+
 # -- end to end against a real daemon ----------------------------------------
 
 

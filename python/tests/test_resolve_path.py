@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import subprocess
 import secrets
 import tempfile
 
@@ -55,7 +56,10 @@ def test_round_trip_under_the_given_name(daemon):
         # Readable twice: each open is a fresh description at offset 0.
         with open(path, "rb") as f:
             assert f.read() == body
-        assert os.readlink(path).startswith("/proc/self/fd/")
+        # The pid, not /proc/self: a helper process opens this memfd, never its own fd N.
+        assert os.readlink(path).startswith(f"/proc/{os.getpid()}/fd/")
+        child = subprocess.run(["cat", path], capture_output=True, check=True)
+        assert child.stdout == body
         assert oct(os.stat(os.path.dirname(path)).st_mode & 0o777) == "0o700"
     c.close()
 

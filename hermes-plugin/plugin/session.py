@@ -9,6 +9,7 @@ from anything the model passed in. Imports are lazy so the module loads
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import functools
 from collections.abc import Coroutine
 from typing import Any
@@ -18,6 +19,31 @@ SEND_TIMEOUT_S = 180.0
 
 class NoSession(Exception):
     """This tool call isn't bound to a chat with a live sender."""
+
+
+class Unsupported(Exception):
+    """This chat's platform adapter can't deliver a file."""
+
+
+class SendTimeout(Exception):
+    """The platform sender didn't finish in time; it was asked to stop."""
+
+
+def adapter_sends_files(adapter: Any) -> bool:
+    """Whether the adapter has its own ``send_document``.
+
+    The harness's base adapter class implements ``send_document`` as a
+    fallback that posts a text notice ("couldn't deliver the file") and
+    reports success. An adapter that inherits it would make every send look
+    delivered when no file went out, so such adapters are refused.
+    """
+    try:
+        from gateway.platforms.base import BasePlatformAdapter  # type: ignore[import-not-found]
+    except ImportError:  # outside a gateway (unit tests): nothing to compare against
+        return True
+    if not isinstance(adapter, BasePlatformAdapter):
+        return True
+    return getattr(type(adapter), "send_document", None) is not BasePlatformAdapter.send_document
 
 
 def _runner() -> Any:
@@ -50,6 +76,8 @@ def current_sender() -> tuple[functools.partial, Any]:
     adapter = lookup(platform, profile) if lookup else runner.adapters.get(platform)
     if adapter is None:
         raise NoSession(f"no live {platform_name} adapter in this gateway")
+    if not adapter_sends_files(adapter):
+        raise Unsupported(f"{platform_name} chats can't receive files from this agent")
 
     thread_id = get_session_env("HERMES_SESSION_THREAD_ID", "")
     if thread_id:
@@ -75,7 +103,14 @@ def runner_on(loop: Any):
             if current is loop:
                 coro.close()
                 raise RuntimeError("cannot wait for a send on the gateway loop itself")
-            return asyncio.run_coroutine_threadsafe(coro, loop).result(timeout=SEND_TIMEOUT_S)
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            try:
+                return future.result(timeout=SEND_TIMEOUT_S)
+            except concurrent.futures.TimeoutError as e:
+                # Stop the upload rather than leave it running after the
+                # one-shot path is gone; it may still have got through.
+                future.cancel()
+                raise SendTimeout(f"the send didn't finish within {SEND_TIMEOUT_S:.0f}s") from e
         if current is None:
             return asyncio.run(coro)
         coro.close()

@@ -74,3 +74,7 @@ hermes-plugin/tests/run-in-agent-image.sh               # everything, inside a H
 ## What `ovenmitt_vault_put` refuses
 
 `put` plus `send` would deliver any file the gateway can read, without the bytes passing the model (so the harness's redaction never sees them). `put` therefore refuses, on the path as given and as resolved: anything under `/proc`, `/sys`, `/dev`, `/run`, `/var/run` and `/etc`; anything inside `.ssh`, `.gnupg`, `.aws`, `.azure`, `.docker`, `.kube` or `.config/gcloud`; and credential files by name (`.env` and `*.env`, `auth.json`, `.netrc`, `.git-credentials`, `.pgpass`, `credentials(.json)`, SSH private keys, `*.pem`, `*.key`, `*.p12`, `*.pfx`). The refusal code is `PATH_REFUSED`. A hard link to a secret elsewhere gets through; that is deliberate hunting, outside the threat model.
+
+## Refusal codes from `ovenmitt_vault_send`
+
+`NOT_CONFIGURED` (no consumer credential), `NO_CHAT` (the turn isn't bound to a chat), `UNSUPPORTED` (the chat's adapter has no `send_document` of its own: the harness's fallback would post a notice and report success with no file sent), `SEND_TIMEOUT` (cancelled after the timeout; the file may still have arrived), `SEND_FAILED`, plus the daemon's own codes (`DESTINATION_NOT_FOUND`, …). Another plugin can ask `send_readiness()` on this module first: it returns the reason a send would be refused now, or None.
