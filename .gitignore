@@ -5,3 +5,4 @@
 /python/.pytest_cache
 *.pyc
 /tests-e2e/.pytest_cache
+.DS_Store
