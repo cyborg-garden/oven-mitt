@@ -267,7 +267,7 @@ Reference producer: a Papa Reo API call (Part C). Any tool whose output must sta
 
 This part is context for *why* the design is strict. Nothing in it is a mode, flag or name in the software.
 
-The [Papa Reo API](https://papareo.io) is offered under the [Kaitiakitanga License](https://github.com/TeHikuMedia/Kaitiakitanga-License/blob/tumu/papareo_api.md). Clause 3 of its API terms is the driver:
+The [Papa Reo API](https://papareo.io) is offered under the [Kaitiakitanga License](https://papareo.io/kaitiakitanga). Clause 3 of its API terms is the driver:
 
 > If you intend on using Papa Reo API outputs with LLMs, translation services, or other tools, you must ensure that those third parties will not have rights to the data you give them. You must not send model outputs to third party services that may collect and use them.
 

@@ -11,7 +11,7 @@ oven-mitt is an arms-length vault for AI agents. Data goes in, an opaque handle 
 
 ### Motivation
 
-This is intended to be generally useful but was motivated by a desire to comply with the [Kaitiakitanga License](https://github.com/TeHikuMedia/Kaitiakitanga-License/blob/tumu/papareo_api.md), Specifically, from Clause 3:
+This is intended to be generally useful but was motivated by a desire to comply with the [Kaitiakitanga License](https://papareo.io/kaitiakitanga), Specifically, from Clause 3:
 
 > You must not send model outputs to third party services that may collect and use them.
 
