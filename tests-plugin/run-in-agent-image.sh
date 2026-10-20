@@ -3,7 +3,7 @@
 # test (test_harness_contract.py) runs against the real session context,
 # platform enum and platform adapter.
 #
-#   hermes-plugin/tests/run-in-agent-image.sh [agent-image] [daemon-image]
+#   tests-plugin/run-in-agent-image.sh [agent-image] [daemon-image]
 #
 # The throwaway container gets the ovenmitt client (from this checkout) and
 # pytest installed at start, and the daemon binary on a read-only mount from
@@ -12,7 +12,7 @@ set -eu
 
 AGENT_IMAGE="${1:-hermes-agent-mt:arm64-local}"
 DAEMON_IMAGE="${2:-ovenmitt:latest}"
-REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
 BIN_DIR="$(mktemp -d)"
 trap 'rm -rf "$BIN_DIR"' EXIT
@@ -25,6 +25,6 @@ docker run --rm --entrypoint "" \
   -v "$BIN_DIR:/daemon:ro" \
   -e OVENMITT_BIN=/daemon/ovenmitt \
   -e PYTHONDONTWRITEBYTECODE=1 \
-  -w /src/hermes-plugin \
+  -w /src \
   "$AGENT_IMAGE" \
-  sh -c 'mkdir /tmp/ovenmitt-python && cp -r /src/python/pyproject.toml /src/python/README.md /src/python/src /tmp/ovenmitt-python/ && uv pip install --quiet --python /opt/hermes/.venv/bin/python /tmp/ovenmitt-python pytest && /opt/hermes/.venv/bin/python -m pytest tests -q -p no:cacheprovider'
+  sh -c 'mkdir /tmp/ovenmitt-python && cp -r /src/python/pyproject.toml /src/python/README.md /src/python/src /tmp/ovenmitt-python/ && uv pip install --quiet --python /opt/hermes/.venv/bin/python /tmp/ovenmitt-python pytest && /opt/hermes/.venv/bin/python -m pytest tests-plugin -q -p no:cacheprovider'

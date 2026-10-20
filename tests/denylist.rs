@@ -56,7 +56,7 @@ fn walk(dir: &Path, out: &mut Vec<std::path::PathBuf>) {
 /// platform (it learns the platform from the sender at run time), no
 /// provider, licence or community. Its tests are not scanned, because the
 /// contract test drives a real platform adapter by name.
-const BRIDGE_SCAN: &[&str] = &["hermes-plugin/plugin", "hermes-plugin/skill"];
+const BRIDGE_SCAN: &[&str] = &["hermes-plugin", "hermes-skill"];
 const BRIDGE_ALLOWED: &[&str] = &["hermes"];
 
 #[test]
