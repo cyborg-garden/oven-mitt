@@ -20,8 +20,8 @@ from pathlib import Path
 import pytest
 
 HERE = Path(__file__).resolve().parent
-PLUGIN_DIR = HERE.parent / "plugin"
-ROOT = HERE.parents[1]
+ROOT = HERE.parent
+PLUGIN_DIR = ROOT / "hermes-plugin"
 PLATFORM = "fakechat"
 
 

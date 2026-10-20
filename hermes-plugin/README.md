@@ -3,17 +3,16 @@
 A [Hermes](https://github.com/NousResearch/hermes-agent) plugin that gives an agent native tools for an ovenmitt vault, plus a generic `ovenmitt` skill that tells the agent how to use them. It sits beside the core because the two version together. It is generic: nothing in it names a platform, provider or use case.
 
 ```
-hermes-plugin/
-├── plugin/   the plugin (plugin.yaml, __init__.py, bridge.py, session.py) → plugins/ovenmitt_bridge/
-├── skill/    SKILL.md                                                   → skills/ovenmitt/
-└── tests/
+hermes-plugin/   the plugin (plugin.yaml, __init__.py, bridge.py, session.py) → plugins/ovenmitt_bridge/
+hermes-skill/    SKILL.md                                                   → skills/ovenmitt/
+tests-plugin/    the plugin's tests (kept outside hermes-plugin/ so they are not installed)
 ```
 
 Install the two directories separately, each pinned to a tag. In a manifest that installs one subdirectory per artifact:
 
 ```
-plugin: git:<org>/oven-mitt#<tag>:hermes-plugin/plugin   (name: ovenmitt_bridge)
-skill:  git:<org>/oven-mitt#<tag>:hermes-plugin/skill    (name: ovenmitt)
+plugin: git:<org>/oven-mitt#<tag>:hermes-plugin   (name: ovenmitt_bridge)
+skill:  git:<org>/oven-mitt#<tag>:hermes-skill    (name: ovenmitt)
 ```
 
 The agent image needs the client library: `pip install ovenmitt` (no MCP extra needed).
@@ -67,8 +66,8 @@ ctx.dispatch_tool("ovenmitt_vault_send", {"handle": h, "filename": "report.txt"}
 ## Tests
 
 ```sh
-uv run --project python pytest hermes-plugin/tests -q   # macOS: daemon-backed tests skip (memfd is Linux-only)
-hermes-plugin/tests/run-in-agent-image.sh               # everything, inside a Hermes image, incl. a real adapter
+uv run --project python pytest tests-plugin -q   # macOS: daemon-backed tests skip (memfd is Linux-only)
+tests-plugin/run-in-agent-image.sh               # everything, inside a Hermes image, incl. a real adapter
 ```
 
 ## What `ovenmitt_vault_put` refuses
