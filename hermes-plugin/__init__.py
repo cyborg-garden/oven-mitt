@@ -34,7 +34,7 @@ from . import bridge, session  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-__version__ = "0.2.0"
+__version__ = "0.3.0"
 
 CREDENTIAL_ENV = "OVENMITT_CONSUMER_CREDENTIAL"
 SOCKET_ENV = "OVENMITT_SOCKET"

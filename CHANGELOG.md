@@ -4,14 +4,22 @@ All notable changes to ovenmitt. Format follows keep-a-changelog; versions follo
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
+### Changed
+- Layout matches the other published artefacts: the plugin is now at `hermes-plugin/` (was `hermes-plugin/plugin/`), the skill at `hermes-skill/` (was `hermes-plugin/skill/`), and the plugin's tests at `tests-plugin/` (was `hermes-plugin/tests/`), so tests are no longer installed with the plugin. Pins become `git:<org>/oven-mitt#<tag>:hermes-plugin` and `:hermes-skill`.
+
+### Added
+- `scripts/check_sanitization.py` and `.github/workflows/sanitization.yml`, ported from swarm-map: a deterministic secrets/PII layer plus an LLM particulars layer over `hermes-plugin/`, `hermes-skill/`, `docker/example/` and top-level docs. The particulars layer needs an `OPENROUTER_API_KEY` repo secret and fails closed without it.
+
+## [0.2.0] - 2026-10-18
+
 ### Added
 - `VaultClient.resolve_path(handle, destination, target, credential, filename)`: resolves into a `memfd` and yields a one-shot path (a symlink named `filename` in a private temp dir) for senders that only take a filename. Closed and removed when the `with` block ends. Linux only; `docker/Dockerfile.pytest` runs the Python tests on Linux from a Mac.
 
 - `hermes-plugin/`: a Hermes plugin (`ovenmitt_bridge`) with seven native `ovenmitt_vault_*` tools and a generic `ovenmitt` skill. `ovenmitt_vault_send` delivers to the current chat only, through the platform adapter's own `send_document` and `resolve_path`; the target is read off the sender, never taken from the model. The consumer credential is popped from the environment at load. Tests include a contract test against a real platform adapter inside the agent image (`tests-plugin/run-in-agent-image.sh`), and the denylist test now scans the bridge for any name but its harness's.
 
 ### Changed
-- `scripts/check_sanitization.py` and `.github/workflows/sanitization.yml`, ported from swarm-map: a deterministic secrets/PII layer plus an LLM particulars layer over `hermes-plugin/`, `hermes-skill/`, `docker/example/` and top-level docs. The particulars layer needs an `OPENROUTER_API_KEY` repo secret and fails closed without it.
-- Layout matches the other published artefacts: the plugin is now at `hermes-plugin/` (was `hermes-plugin/plugin/`), the skill at `hermes-skill/` (was `hermes-plugin/skill/`), and the plugin's tests at `tests-plugin/` (was `hermes-plugin/tests/`), so tests are no longer installed with the plugin. Pins become `git:<org>/oven-mitt#<tag>:hermes-plugin` and `:hermes-skill`.
 - The Python package's `mcp` dependency is now the optional extra `ovenmitt[mcp]`; the base package (the client) depends on `httpx` only, so it installs beside an agent image's own MCP pin. Without the extra, `ovenmitt mcp` exits with an install hint. The agent image installs the extra.
 - BRIEF: `resolve_path` promoted to v1; Part B amended (the integration lives in three homes, and sends go through the platform adapter's own send interface).
 

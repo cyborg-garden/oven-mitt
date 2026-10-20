@@ -1,5 +1,5 @@
 name: ovenmitt_bridge
-version: 0.2.0
+version: 0.3.0
 description: >-
   Native tools for an ovenmitt write-only vault: put a file in, list, stat,
   label, delete, list destinations, and send an object to the current chat
