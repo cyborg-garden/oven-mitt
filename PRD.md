@@ -1,8 +1,8 @@
 # ovenmitt — PRD (Part A, core, v1)
 
-*Project name: **ovenmitt** — handle the hot thing without touching it. Repo: `github.com/utunga/oven-mitt`. The hyphen is the repo's only; binary, daemon, package and PyPI name are `ovenmitt`.*
+*Project name: **ovenmitt** — handle the hot thing without touching it. Repo: `github.com/cyborg-garden/oven-mitt`. The hyphen is the repo's only; binary, daemon, package and PyPI name are `ovenmitt`.*
 
-*Status: draft 0.5, 2026-10-13 (0.4 + implementation clarifications from M4, marked inline). Derived from BRIEF.md (decisions 1–22), reconciled against the independent second review (`PRD-hermes_digicryptids.md`, Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
+*Status: draft 0.5, 2026-10-13 (0.4 + implementation clarifications from M4, marked inline). Derived from BRIEF.md (decisions 1–22), reconciled against an independent second review (Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
 
 **How to read this.** Requirements carry IDs (`R-xxx-n`), security invariants carry `SI-n`, tests carry `AT-n`. MUST/SHOULD/MAY are RFC 2119. §0 lists every point where the brief was silent or inconsistent and records how it was decided; nothing below is a silent assumption.
 
@@ -32,7 +32,7 @@ The **2nd** column marks items the second, independent review also raised (its `
 | F-14 | AMB-12 | §4 labels | Agent-visible, agent-settable; a producer that labels with content leaks. | Default. ≤ 256 bytes, ≤ 16 per object; tool-author warning; label text never logged. |
 | F-15 | — | §4 `expose_names` | Store-but-hide or discard the original name? The operator may need names to find something for a human. | **Decided.** Always stored (encrypted). Agent sees it iff the vault's `expose_names` is `true` now. Operator always sees it via `ovenmitt object stat`. The setting governs all objects in the vault, past and future; one doc line says so. No per-object state. |
 | F-16 | — | §5.1, §7 | An `fs` root also mounted into the agent container is a read path. | **Decided** (with F-1). Unavoidable, documented, not defended. Shipped compose never does it. |
-| F-17 | — | §5.1, §2 | `vault` collides with HashiCorp; `vault` as a Python name is unusable. | **Decided: `ovenmitt`.** Binary `ovenmitt`, daemon `ovenmittd`, Python package and import `ovenmitt`, protocol header `X-Ovenmitt-Protocol`, repo `utunga/oven-mitt`. MCP tool names stay `vault_*` — to the model, "vault" is the right picture. Free on PyPI and crates.io. |
+| F-17 | — | §5.1, §2 | `vault` collides with HashiCorp; `vault` as a Python name is unusable. | **Decided: `ovenmitt`.** Binary `ovenmitt`, daemon `ovenmittd`, Python package and import `ovenmitt`, protocol header `X-Ovenmitt-Protocol`, repo `cyborg-garden/oven-mitt`. MCP tool names stay `vault_*` — to the model, "vault" is the right picture. Free on PyPI and crates.io. |
 | F-18 | — | §4 credential | Scope? | **Decided.** `{id, name, vaults: [...] \| "*"}`. One allowlist — the vault's destinations. No per-credential destination scope. |
 | F-19 | — | §7 | Config reload. | Default. Restart only; config SHA-256 in the `start` entry. |
 | F-20 | — | silent | Several agent containers on one daemon? | Default. One daemon, one agent trust domain. |
@@ -62,7 +62,7 @@ The brief's §11 "Open items: none" was wrong; F-1, F-2, F-6, F-7, F-17, F-26, F
 - Docs: threat model, operator invariants, limitations.
 
 ### 1.2 Out of scope (v1)
-Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, `resolve_path`, transforms, version retention, multi-agent tenancy, log rotation, key rotation, body (inline-text) sends, TCP transport (ever). Everything Hermes/Signal/Papa Reo-specific (Part B, Part C).
+Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, `resolve_path`, transforms, version retention, multi-agent tenancy, log rotation, key rotation, body (inline-text) sends, TCP transport (ever). Everything specific to one harness, platform or data provider (Part B, Part C).
 
 ### 1.3 Deliverables
 `ovenmittd` image; `ovenmitt` Python package (client + MCP server); compose file; docs; test suite executing §9.
@@ -536,7 +536,7 @@ These go in the docs verbatim.
 
 | Brief | PRD |
 |---|---|
-| project `llm-safe-kaitiaki` | project **ovenmitt**; repo `utunga/oven-mitt` (hyphen in the repo name only) |
+| project (working name) | project **ovenmitt**; repo `cyborg-garden/oven-mitt` (hyphen in the repo name only) |
 | `vault` / `vault mcp` / `vault audit …` | `ovenmitt` / `ovenmitt mcp` / `ovenmitt audit …` |
 | daemon (unnamed) | `ovenmittd` |
 | `vault.put()` | `VaultClient.put()` from package `ovenmitt` |
@@ -547,7 +547,7 @@ These go in the docs verbatim.
 
 ---
 
-## Appendix A — Reconciliation with the second review (`PRD-hermes_digicryptids.md`, removed from the tree in 8a63eb0; see git history)
+## Appendix A — Reconciliation with the second review (a separate draft, not kept in the tree)
 
 **Converged independently:** resolve takes name + target (F-2/AMB-5); caller identity unfixable in Docker v1 (F-6/AMB-10); pattern grammar must be fixed (F-3/AMB-4); content hash audit-only (AMB-3); handles global (AMB-6); `remove_source` client-side (F-13/AMB-11); label bounds (F-14/AMB-12); body sends need rules (F-4/AMB-8); platform names in values not defaults (F-29/AMB-13).
 

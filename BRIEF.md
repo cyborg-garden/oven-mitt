@@ -1,6 +1,6 @@
 # ovenmitt — BRIEF
 
-*Status: brief. Decisions captured from design interview, 2026-10-12; updated the same day after PRD review (decisions 23–34). Project name is `ovenmitt`; the repo is `github.com/utunga/oven-mitt`. The hyphen is for the repo only: binary, daemon, Python package and PyPI name are `ovenmitt`, since a hyphen can't appear in an import or a sensible binary name (cf. `scikit-learn` / `sklearn`).*
+*Status: brief. Decisions captured from design interview, 2026-10-12; updated the same day after PRD review (decisions 23–34). Project name is `ovenmitt`; the repo is `github.com/cyborg-garden/oven-mitt`. The hyphen is for the repo only: binary, daemon, Python package and PyPI name are `ovenmitt`, since a hyphen can't appear in an import or a sensible binary name (cf. `scikit-learn` / `sklearn`).*
 
 *The one-line design criterion: make it **hard** for an agent to accidentally send protected data through its context, not impossible. Simple, elegant, free of foot-guns.*
 
@@ -155,7 +155,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 
 ## 11. Open items
 
-- None at present. (Repo renamed to `utunga/oven-mitt`; `ovenmitt` confirmed free on crates.io and PyPI.)
+- None at present. (Repo is `cyborg-garden/oven-mitt`; `ovenmitt` confirmed free on crates.io and PyPI.)
 
 ## 12. Decisions log
 
@@ -179,7 +179,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 16 | No content check, search or LLM proxy in v1; they are future candidates (§10.2) |
 | 17 | Rust core, Python client, AGPL-3.0 (matches Swarm Map) |
 | 18 | Optional per-vault TTL, unset by default |
-| 19 | Name: `ovenmitt` (binary `ovenmitt`, daemon `ovenmittd`, Python package `ovenmitt`; MCP tools `vault_*`); repo `utunga/oven-mitt`. Was `llm-safe-kaitiaki` |
+| 19 | Name: `ovenmitt` (binary `ovenmitt`, daemon `ovenmittd`, Python package `ovenmitt`; MCP tools `vault_*`); repo `cyborg-garden/oven-mitt` |
 | 20 | No policy modes. Every behaviour is set by explicit per-vault config |
 | 21 | No domain-specific names (licences, providers, communities, platforms) in core code, config keys, defaults or shipped examples. Operator config values are unrestricted |
 | 22 | One `put` operation: a stream (library) or a path (MCP); `remove_source`, `replace`. No separate import |
@@ -233,7 +233,7 @@ v1 trusts the bridge to declare truthfully. The control that removes that trust 
 
 ## B4. End-to-end acceptance test (one Hermes agent)
 
-Reference producer: a Papa Reo API call (Part C). Any tool whose output must stay out of context works the same way.
+Reference producer: a call to a licence-restricted third-party API (Part C). Any tool whose output must stay out of context works the same way.
 
 1. The user asks the agent on Signal for something whose output must be protected.
 2. The agent calls the producer tool and receives a handle plus metadata only.
@@ -263,24 +263,24 @@ Reference producer: a Papa Reo API call (Part C). Any tool whose output must sta
 - **Tool-result scrubber:** a `transform_tool_result` hook that calls the core `check` (§10.2) on every tool result and replaces any match with `[redacted: vault content]`. Tool output is the main way content enters context, and this hook can rewrite it.
 - **LLM proxy:** Hermes's base URL pointed at a proxy that calls `check` on every outgoing request and refuses on a match. It's the only way to block a whole request, since no Hermes hook can.
 
-# Part C — Motivating case: Papa Reo and the Kaitiakitanga License
+# Part C — Motivating case: a licence that restricts onward sharing
 
 This part is context for *why* the design is strict. Nothing in it is a mode, flag or name in the software.
 
-The [Papa Reo API](https://papareo.io) is offered under the [Kaitiakitanga License](https://papareo.io/kaitiakitanga). Clause 3 of its API terms is the driver:
+The motivating case is a third-party speech API whose licence restricts onward sharing of its outputs. The relevant clause reads, in substance:
 
-> If you intend on using Papa Reo API outputs with LLMs, translation services, or other tools, you must ensure that those third parties will not have rights to the data you give them. You must not send model outputs to third party services that may collect and use them.
+> If you use the API's outputs with LLMs, translation services or other tools, you must ensure those third parties will not have rights to the data you give them. You must not send model outputs to third-party services that may collect and use them.
 
 What follows for this project:
 
 - **Outputs must never reach an LLM provider's context.** Agents may orchestrate the work but must never read the results. That is the write-only sink, with no read path.
 - **Every onward destination is a third-party question.** That is why destinations are declared per vault and denied by default, and why every resolve is checked and audited.
-- **Hold data no longer than needed.** Papa Reo deletes submitted data once processed. Setting a `ttl` on vaults that hold Papa Reo outputs follows the same posture.
-- **Kaitiakitanga of the data stays with the kaitiaki who submitted it.** The audit trail exists so that kaitiaki can be confident about what did and didn't happen to their data.
+- **Hold data no longer than needed.** The provider deletes submitted data once processed. Setting a `ttl` on vaults that hold its outputs follows the same posture.
+- **Guardianship of the data stays with the people who submitted it.** The audit trail exists so that they can be confident about what did and didn't happen to their data.
 
-Open question for Papa Reo outputs:
+Open question for licence-restricted outputs:
 
-- **Which messaging platforms can be compatible with the Kaitiakitanga License at all?** Every send destination is a third party under clause 3, so this applies to all of them, not just Discord. Prepare a data pack for each candidate covering: the platform's terms on AI or ML use of message content and attachments, who holds rights to data on a server or in a group, retention, and whether the operator can read content.
-  - **Discord:** the doubtful case. It is a central service that can read message content and attachments. Until resolved, it is not declared as a destination on vaults holding Papa Reo outputs.
-  - **Signal:** the likely-compatible case. Messages and attachments are end-to-end encrypted, so Signal's servers can't read them. It still needs checking, including signal-cli's local storage (Part B open item).
-  - **Self-hosted platforms (e.g. Mattermost):** the operator holds the data, so the question becomes who runs the server.
+- **Which messaging platforms can be compatible with such a licence at all?** Every send destination is a third party under that clause, so the question applies to all of them. Prepare a data pack for each candidate covering: the platform's terms on AI or ML use of message content and attachments, who holds rights to data on a server or in a group, retention, and whether the operator can read content.
+  - **Centrally hosted platforms that can read message content:** the doubtful case. Until resolved, they are not declared as destinations on vaults holding restricted outputs.
+  - **End-to-end encrypted platforms:** the likely-compatible case, since the servers can't read messages or attachments. Still needs checking, including any local storage kept by the sending client (Part B open item).
+  - **Self-hosted platforms:** the operator holds the data, so the question becomes who runs the server.

@@ -1,7 +1,6 @@
 # ovenmitt (Python)
 
-<!-- FIXME: move this utunga/ URL to cyborg-garden/oven-mitt as soon as that is fixed (DEVELOPMENT.md §13) -->
-Client library and MCP server for the [ovenmitt](https://github.com/utunga/oven-mitt) write-only vault daemon. Installed in the agent container; the daemon never has it.
+Client library and MCP server for the [ovenmitt](https://github.com/cyborg-garden/oven-mitt) write-only vault daemon. Installed in the agent container; the daemon never has it.
 
 ```python
 from ovenmitt import VaultClient
