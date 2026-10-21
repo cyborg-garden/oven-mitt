@@ -2,7 +2,7 @@
 
 *Status: draft 0.1, 2026-10-12. Sits under PRD.md (0.4). The PRD says what and why; this says how, in what order, and what "done" means at each step. Where this document makes a decision the PRD left open, it's listed in §11 so it can be challenged.*
 
-**Working rule:** every milestone ends with named acceptance tests (PRD §9) passing, not with "code written". No milestone starts until the previous one's tests pass on the Mac.
+**Working rule:** every milestone ends with named acceptance tests (PRD §9) passing, not with "code written". No milestone starts until the previous one's tests pass locally.
 
 ---
 
@@ -93,7 +93,7 @@ oven-mitt/
 
 Not a Cargo workspace: one crate is enough and a workspace adds ceremony with no second crate to justify it. Split if a second binary ever appears. The crate has a library target plus the one binary, so integration tests in `tests/` can call modules directly and the binary stays a dispatcher.
 
-No `rust-toolchain.toml`: the cloud shell where day-to-day builds happen has 1.97 and can't download toolchains, so `rust-version = "1.97"` is the floor. CI pins 1.99.0 (the Mac's version) because clippy's lint set changes between releases and `-D warnings` turns a new lint into a red build; a lint that only 1.99 knows about is fixed in code, never allowed in `Cargo.toml` (an unknown lint name is itself a warning on 1.97).
+No `rust-toolchain.toml`: some development environments have 1.97 and can't download toolchains, so `rust-version = "1.97"` is the floor. CI pins 1.99.0 (the release used for gate runs) because clippy's lint set changes between releases and `-D warnings` turns a new lint into a red build; a lint that only 1.99 knows about is fixed in code, never allowed in `Cargo.toml` (an unknown lint name is itself a warning on 1.97).
 
 ---
 
@@ -239,12 +239,12 @@ In order, each step fatal on failure with a one-line reason on stderr:
 
 | Layer | Runs with | Owns |
 |---|---|---|
-| Rust unit (`#[cfg(test)]`) | `cargo test` on the Mac, or my shell | grammars (names, filenames, durations, sizes), pattern matcher (AT-26), handle format, chunked AEAD round-trip + truncation/reorder rejection, canonical JSON + no-floats, chain verify + tamper matrix (AT-12), review rules at/under threshold (AT-24), credential token format |
+| Rust unit (`#[cfg(test)]`) | `cargo test` | grammars (names, filenames, durations, sizes), pattern matcher (AT-26), handle format, chunked AEAD round-trip + truncation/reorder rejection, canonical JSON + no-floats, chain verify + tamper matrix (AT-12), review rules at/under threshold (AT-24), credential token format |
 | Rust integration (`tests/`) | `cargo test`; daemon in-process on a temp socket; raw `hyper` client | every route and error code (AT-1, 5, 6, 7, 16, 25, 27), export confinement (AT-9, 10), TTL (AT-15), aborted streams (AT-14), at-rest sentinel scans (AT-21), refusal durability (AT-23), credential lifecycle (AT-17), `expose_names` (AT-22), config validation and key-refusal (AT-18, 19) |
-| Python (`python/tests`) | `pytest` against a daemon started by the Rust test helper binary or a local `ovenmitt daemon`; on a Mac, `docker/Dockerfile.pytest` runs the same suite on Linux | client parity with the wire, MCP tool list (SI-13 / AT-2), `vault_put` unlink-after-201, `list_vaults` on MCP (AT-29), `resolve_path` (Linux only: `memfd_create`), client import without `mcp` |
-| End-to-end (`tests-e2e/`) | `pytest` on the Mac driving `docker compose -f docker/docker-compose.test.yml` | store absent from agent container (AT-8), no TCP listener (AT-20), `verify`/`review` via `docker exec` (AT-11), full sentinel sweep across containers (AT-13), denylist grep (AT-28) |
+| Python (`python/tests`) | `pytest` against a daemon started by the Rust test helper binary or a local `ovenmitt daemon`; on macOS, `docker/Dockerfile.pytest` runs the same suite on Linux | client parity with the wire, MCP tool list (SI-13 / AT-2), `vault_put` unlink-after-201, `list_vaults` on MCP (AT-29), `resolve_path` (Linux only: `memfd_create`), client import without `mcp` |
+| End-to-end (`tests-e2e/`) | `pytest` driving `docker compose -f docker/docker-compose.test.yml` | store absent from agent container (AT-8), no TCP listener (AT-20), `verify`/`review` via `docker exec` (AT-11), full sentinel sweep across containers (AT-13), denylist grep (AT-28) |
 
-CI runs all four on every push to `tumu`, as three workflows (`rust`, `python`, `e2e`) so each gets a README badge; e2e takes a few minutes because it builds both images. The Mac runs all four before any tag.
+CI runs all four on every push to the default branch, as three workflows (`rust`, `python`, `e2e`) so each gets a README badge; e2e takes a few minutes because it builds both images. All four are run locally before any tag.
 
 **Sentinel discipline.** Every test that asserts "X never appears" uses a fresh 64-byte random string generated per test, never a fixed constant, so a stale fixture can't make a leak test pass.
 
@@ -261,18 +261,18 @@ CI runs all four on every push to `tumu`, as three workflows (`rust`, `python`, 
 | D-5 | Credentials file is re-read on mtime change, not on a signal. | Revoke-without-restart with one `stat` per resolve and no signal handling. |
 | D-6 | `mime` is duplicated in cleartext `meta.json`. | `list` must not decrypt; `mime` is agent-visible anyway. |
 | D-7 | Python ≥ 3.11. | `tomllib`, modern typing; nothing older is worth supporting for a new package. |
-| D-8 | Daemon image built per-architecture inside Docker, never cross-compiled from the Mac. | The binary that runs in the container is built for the container. |
+| D-8 | Daemon image built per-architecture inside Docker, never cross-compiled from the host. | The binary that runs in the container is built for the container. |
 | D-11 | The daemon runs its own accept loop over hyper's HTTP/1 server instead of `axum::serve`. | hyper drops a request whose client half-closed before the response unless `half_close(true)` is set, and `axum::serve` can't set it. Without it a client could send a refused request, close, and leave no audit entry — the exact thing R-AUD-6 forbids. Found by AT-23. |
 | D-12 | Each handler runs on its own Tokio task, spawned by the guard middleware. | hyper cancels the in-flight service future when the connection dies; spawning makes the handler (and its audit write) run to completion regardless. |
 | D-13 | A refused read (`stat`/`list` of something that isn't there) is audited as a refused `request`; successful reads are not logged. | Keeps SI-7 literally true ("every refused request yields exactly one entry") without logging every successful stat. An agent probing handles is worth seeing in `review`. |
 | D-10 | An unreadable or corrupt object record, or an object whose vault is no longer in the config, refuses startup. | Same posture as a missing key: a daemon that silently skips an object it can't account for is a daemon whose `list` lies. The message names the directory so the operator can move it aside. |
-| D-9 | Work lands on `tumu` in small commits; a feature branch + PR only when a milestone touches more than one layer at once. | Solo project; PR ceremony for every commit slows it down without catching anything a test run doesn't. Change this if a second contributor appears. |
+| D-9 | Work lands on the default branch in small commits; a feature branch + PR only when a milestone touches more than one layer at once. | Solo project; PR ceremony for every commit slows it down without catching anything a test run doesn't. Change this if a second contributor appears. |
 
 ---
 
 ## 12. Milestones
 
-Each milestone's "done" is a list of tests passing on the Mac. Order is dependency order; nothing is parallel.
+Each milestone's "done" is a list of tests passing locally. Order is dependency order; nothing is parallel.
 
 | M | Deliverable | Done when |
 |---|---|---|
@@ -284,8 +284,8 @@ Each milestone's "done" is a list of tests passing on the Mac. Order is dependen
 | **M5** | Credentials + `resolve` + `export` end to end; `ovenmitt credential …`. | AT-4, AT-5 full truth table, AT-9, AT-10, AT-17; `target` present in audit entries. |
 | **M6** | Review: rules, output, exit codes; `ovenmitt audit review`; `vault list`, `object stat`. | AT-11 (in-process), AT-24. |
 | **M7** | Python client + MCP server + `ovenmitt mcp`. | Python tests: AT-2, AT-29, SI-13 tool-list test, parity test for every endpoint. |
-| **M8** | Compose (reference + test), agent image, e2e suite. | AT-8, 11 (via `docker exec`), 13, 20, 28 on the Mac. **This is the v1 acceptance gate** — brief §9 maps to AT-1/2, 4, 5–9, 11. |
-| **M9** | Docs: README with PRD §11 verbatim, operator checklist, tool-author guide, threat model in the "hard, not impossible" framing; `CHANGELOG`; tag `v0.1.0`. | A reviewer can deploy from the README alone; every R-DOC item has a section. **Tag only after the M8 gate passes on the Mac.** |
+| **M8** | Compose (reference + test), agent image, e2e suite. | AT-8, 11 (via `docker exec`), 13, 20, 28 locally. **This is the v1 acceptance gate** — brief §9 maps to AT-1/2, 4, 5–9, 11. |
+| **M9** | Docs: README with PRD §11 verbatim, operator checklist, tool-author guide, threat model in the "hard, not impossible" framing; `CHANGELOG`; tag `v0.1.0`. | A reviewer can deploy from the README alone; every R-DOC item has a section. **Tag only after the M8 gate passes locally.** |
 
 Rough shape of effort: M0–M3 are where Rust is learned; expect them to be slow and the rest fast. M4 is the largest single milestone. M8 is where surprises live (socket permissions across containers, arm64/amd64).
 
@@ -301,10 +301,10 @@ Rough shape of effort: M0–M3 are where Rust is learned; expect them to be slow
 - Tests that assert absence use per-test random sentinels (§10).
 - Commit messages: imperative subject, body says why; reference `R-`/`SI-`/`AT-` IDs when a commit makes one pass.
 - `CHANGELOG.md` from M0 onward, "Unreleased" section, keep-a-changelog style.
-- **GitHub org: `cyborg-garden` wherever possible.** The intended homes are `cyborg-garden/oven-mitt` and `cyborg-garden/papareo-transcribe`. Where a `utunga/` path has to be used in the meantime (a repo URL, a `git:` pin, a badge, a package's `repository` field), put a `FIXME` comment next to it saying it moves to `cyborg-garden` as soon as that is fixed, so `rg 'FIXME.*cyborg-garden'` finds every one. Historical records (decision logs, changelogs) describe what was true at the time and don't need one.
+- **GitHub org: `cyborg-garden`.** The repo lives at `cyborg-garden/oven-mitt`; use that path for repo URLs, `git:` pins, badges and a package's `repository` field. Producers live in their own repos under the same org.
 
 ---
 
-## 14. What I need from you before M0
+## 14. Prerequisites
 
-Nothing. `cargo 1.99` and `docker compose v5.1.2` are confirmed. I'll install Rust in my own shell at M0 and run `cargo test` there as I go; you run the same on the Mac at each milestone gate and the e2e suite at M8.
+`cargo 1.99` and `docker compose v5.1.2`. Run `cargo test` as you go, and the full suite plus the e2e suite at each milestone gate.

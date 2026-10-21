@@ -1,9 +1,8 @@
 # oven-mitt
 
-<!-- FIXME: move these utunga/ URLs to cyborg-garden/oven-mitt as soon as that is fixed (DEVELOPMENT.md §13) -->
-[![rust](https://github.com/utunga/oven-mitt/actions/workflows/rust.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/rust.yml)
-[![python](https://github.com/utunga/oven-mitt/actions/workflows/python.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/python.yml)
-[![e2e](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml/badge.svg?branch=tumu)](https://github.com/utunga/oven-mitt/actions/workflows/e2e.yml)
+[![rust](https://github.com/cyborg-garden/oven-mitt/actions/workflows/rust.yml/badge.svg?branch=tumu)](https://github.com/cyborg-garden/oven-mitt/actions/workflows/rust.yml)
+[![python](https://github.com/cyborg-garden/oven-mitt/actions/workflows/python.yml/badge.svg?branch=tumu)](https://github.com/cyborg-garden/oven-mitt/actions/workflows/python.yml)
+[![e2e](https://github.com/cyborg-garden/oven-mitt/actions/workflows/e2e.yml/badge.svg?branch=tumu)](https://github.com/cyborg-garden/oven-mitt/actions/workflows/e2e.yml)
 
 *Allow AI agents to manipulate data and files without sending the data to the LLM provider's servers.*
 

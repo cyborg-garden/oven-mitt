@@ -6,7 +6,7 @@ rust-version = "1.97"
 description = "Handle the hot thing without touching it: a write-only vault daemon so agents can move data they must never read."
 license = "AGPL-3.0-only"
 # FIXME: move to cyborg-garden/oven-mitt as soon as that is fixed (DEVELOPMENT.md §13)
-repository = "https://github.com/utunga/oven-mitt"
+repository = "https://github.com/cyborg-garden/oven-mitt"
 publish = false
 
 [[bin]]
