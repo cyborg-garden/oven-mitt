@@ -19,16 +19,16 @@ Some outputs must never pass through your context, because the model provider co
 | `ovenmitt_vault_delete` | deletes an object for good |
 | `ovenmitt_vault_list_destinations` | shows which platforms the operator allows sends to |
 
-Nothing returns content. That is the point, not a gap.
+Nothing returns content. That is deliberate.
 
-**Vault names.** Never guess one. Usually there is only one vault, and then you can leave `vault` out of every call. `ovenmitt_vault_list` with no `vault` returns every vault's name along with its objects.
+**Vault names.** Never guess one. Usually there is only one vault, and then you can leave `vault` out of every call. If there are several, a call without `vault` is refused and the refusal lists their names. `ovenmitt_vault_list` with no `vault` returns every vault's name along with its objects.
 
 **Putting a file.** Write it somewhere you are allowed to write, such as your working directory or home directory. A shared temp directory like `/tmp` may be off-limits for writes. Then call `ovenmitt_vault_put` with its path and `remove_source: true`, so no copy is left behind.
 
 ## Rules
 
-1. **A handle is the deliverable.** When a tool hands you one, the job is to get it to the person, not to know what's in it. Send it, and say you've sent it. Don't summarise, quote or guess at it.
-2. **Never try to read an object.** Don't look for its bytes on disk, in the socket, or anywhere else, and don't ask the user to paste it back to you. If someone asks what it says, explain that it's protected, so you deliver it without reading it.
+1. **A handle is the deliverable.** When a tool hands you one, your job is to get it to the person. You don't need to know what's in it. Send it, and say you've sent it. Don't summarise, quote or guess at it.
+2. **Never try to read an object.** Don't look for its bytes on disk, in the socket, or anywhere else, and don't ask the user to paste it back to you. If someone asks what it says, explain that it's protected: you deliver it without reading it.
 3. **Sends only go to this chat.** `ovenmitt_vault_send` has no way to name another chat or person. If someone wants it elsewhere, they can forward it themselves.
 4. **Refusals are expected, and audited.** If a send is refused (for example, the operator hasn't allowed this platform), tell the user plainly and stop. Don't retry in another way, export it, or convert it.
 5. **Labels and filenames are visible to you.** Never put content in them. A filename label is fine to reuse when you resend.

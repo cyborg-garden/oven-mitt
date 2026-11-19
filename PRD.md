@@ -1,8 +1,8 @@
-# ovenmitt — PRD (Part A, core, v1)
+# ovenmitt PRD (Part A, core, v1)
 
-*Project name: **ovenmitt** — handle the hot thing without touching it. Repo: `github.com/cyborg-garden/oven-mitt`. The hyphen is the repo's only; binary, daemon, package and PyPI name are `ovenmitt`.*
+*Project name: **ovenmitt**. Handle the hot thing without touching it. Repo: `github.com/cyborg-garden/oven-mitt`. Only the repo name has a hyphen; the binary, daemon, package and PyPI name are `ovenmitt`.*
 
-*Status: draft 0.5, 2026-10-13 (0.4 + implementation clarifications from M4, marked inline). Derived from BRIEF.md (decisions 1–22), reconciled against an independent second review (Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10). No code exists yet.*
+*Status: specification 0.5, 2026-10-13. Version 0.4 was written before any code; 0.5 adds implementation clarifications from M4, marked inline. v1 is implemented and tagged. One later change is marked inline: `resolve_path` moved into v1 on 2026-10-16. For how to run it, see [README.md](README.md). Derived from [BRIEF.md](BRIEF.md) (decisions 1–22), reconciled against an independent second review (Appendix A), then settled in a design interview (Appendix B). Scope: Part A only, Docker only. Part B is treated here as an external consumer of Part A's interfaces (§10).*
 
 **How to read this.** Requirements carry IDs (`R-xxx-n`), security invariants carry `SI-n`, tests carry `AT-n`. MUST/SHOULD/MAY are RFC 2119. §0 lists every point where the brief was silent or inconsistent and records how it was decided; nothing below is a silent assumption.
 
@@ -20,10 +20,10 @@ The **2nd** column marks items the second, independent review also raised (its `
 | F-2 | AMB-5 | §6 vs §B3 | `resolve(h, destination)` takes a name in §6, a concrete target string in §B3. A name enforces nothing; a bare target leaves the log nameless. | **Decided.** `resolve(handle, destination, target, credential)`: the consumer names the declared destination *and* the concrete target; the daemon checks target against pattern, logs both. Trusts tool code to declare truthfully, which is where the threat model draws its line. |
 | F-3 | AMB-4 | §7 | `match` grammar unspecified. | **Decided.** A literal, optionally ending in `/*` meaning exactly one more non-empty segment. No other wildcard, no regex. Smallest grammar that covers the known cases; can widen later, never narrow. |
 | F-4 | AMB-8 | §7 `as = "body"` | The daemon can't enforce "send as text"; binary bodies and size were unspecified; and (F-25) nobody has checked whether Hermes mirrors message *text* into session history. No use case on the table needs it. | **Decided: removed from v1.** Every send is bytes; the consumer attaches them. No `as` key, no encoding check. If inline text sends are ever wanted, the Hermes mirror question gets answered first. |
-| F-5 | — | §6 | `overwrite: true` on export — agent argument or operator config? | **Decided.** Per-destination config, default `false`. The agent never widens what a destination permits; on collision it gets `EXISTS` and picks another name. |
+| F-5 | — | §6 | `overwrite: true` on export: agent argument or operator config? | **Decided.** Per-destination config, default `false`. The agent never widens what a destination permits; on collision it gets `EXISTS` and picks another name. |
 | F-6 | AMB-10 | §8 "caller (peer UID …)" | Every process in the agent container shares one UID; both containers often share it too. Peer UID can't distinguish callers. Both reviews call this v1's weakest point. A client-declared "role" is self-attestation. | **Decided.** `caller` records `{uid, pid, cred}` for forensics only. Authorisation: valid credential → *consumer*; otherwise → *agent*. The real fix (`SO_PEERCRED` against a dedicated user) is local mode, future. |
-| F-7 | — | §5.1 | What is encryption at rest *for*, given the agent can't see keys or ciphertext anyway? | **Decided.** Keep it; it's cheap. It protects the data volume when it travels without the keys volume (backups, snapshots, pulled disks), and per-object keys make deletion mean something (F-8). It never replaces isolation: the daemon must hold the key to serve requests, so an isolation boundary — Docker now, a dedicated OS user later — is always what keeps the key from the agent. Local mode swaps one isolation mechanism for another; it never drops it. Keys in a separate volume (`ovenmitt-keys`); passphrase/KMS wrapping is future. |
-| F-8 | — | §4, §6 | "Old bytes deleted immediately" — `unlink` on overlayfs/SSD is not erasure. | **Decided.** Per-object data key (DEK) wrapped by the vault key (KEK). Delete/replace/expire unlinks the ciphertext *and* destroys the wrapped DEK. `delete` is an explicit agent-callable operation. No physical-erasure claim. |
+| F-7 | — | §5.1 | What is encryption at rest *for*, given the agent can't see keys or ciphertext anyway? | **Decided.** Keep it; it's cheap. It protects the data volume when it travels without the keys volume (backups, snapshots, pulled disks), and per-object keys make deletion mean something (F-8). It never replaces isolation: the daemon must hold the key to serve requests, so an isolation boundary always keeps the key from the agent: Docker now, a dedicated OS user later. Local mode swaps one isolation mechanism for another; it never drops it. Keys in a separate volume (`ovenmitt-keys`); passphrase/KMS wrapping is future. |
+| F-8 | — | §4, §6 | "Old bytes deleted immediately", but `unlink` on overlayfs/SSD is not erasure. | **Decided.** Per-object data key (DEK) wrapped by the vault key (KEK). Delete/replace/expire unlinks the ciphertext *and* destroys the wrapped DEK. `delete` is an explicit agent-callable operation. No physical-erasure claim. |
 | F-9 | — | §6 | No way for the agent to discover vault names, yet `put` requires one. | **Decided.** `list_vaults` on every face, including an operator command. No default vault; every call names one. |
 | F-10 | — | §7, §18 | TTL start point; expiry semantics; per-object TTL? | Default. From the last body commit (`replace` resets). Expired = gone; `stat` → `NOT_FOUND`. Per-vault only. |
 | F-11 | — | §8 events | `label` not listed; `stat`/`list` unmentioned. | Default. `label` audited as an event, never its text. `stat`/`list` not audited. |
@@ -32,13 +32,13 @@ The **2nd** column marks items the second, independent review also raised (its `
 | F-14 | AMB-12 | §4 labels | Agent-visible, agent-settable; a producer that labels with content leaks. | Default. ≤ 256 bytes, ≤ 16 per object; tool-author warning; label text never logged. |
 | F-15 | — | §4 `expose_names` | Store-but-hide or discard the original name? The operator may need names to find something for a human. | **Decided.** Always stored (encrypted). Agent sees it iff the vault's `expose_names` is `true` now. Operator always sees it via `ovenmitt object stat`. The setting governs all objects in the vault, past and future; one doc line says so. No per-object state. |
 | F-16 | — | §5.1, §7 | An `fs` root also mounted into the agent container is a read path. | **Decided** (with F-1). Unavoidable, documented, not defended. Shipped compose never does it. |
-| F-17 | — | §5.1, §2 | `vault` collides with HashiCorp; `vault` as a Python name is unusable. | **Decided: `ovenmitt`.** Binary `ovenmitt`, daemon `ovenmittd`, Python package and import `ovenmitt`, protocol header `X-Ovenmitt-Protocol`, repo `cyborg-garden/oven-mitt`. MCP tool names stay `vault_*` — to the model, "vault" is the right picture. Free on PyPI and crates.io. |
-| F-18 | — | §4 credential | Scope? | **Decided.** `{id, name, vaults: [...] \| "*"}`. One allowlist — the vault's destinations. No per-credential destination scope. |
+| F-17 | — | §5.1, §2 | `vault` collides with HashiCorp; `vault` as a Python name is unusable. | **Decided: `ovenmitt`.** Binary `ovenmitt`, daemon `ovenmittd`, Python package and import `ovenmitt`, protocol header `X-Ovenmitt-Protocol`, repo `cyborg-garden/oven-mitt`. MCP tool names stay `vault_*`, because to the model "vault" is the right picture. Free on PyPI and crates.io. |
+| F-18 | — | §4 credential | Scope? | **Decided.** `{id, name, vaults: [...] \| "*"}`. One allowlist: the vault's destinations. No per-credential destination scope. |
 | F-19 | — | §7 | Config reload. | Default. Restart only; config SHA-256 in the `start` entry. |
 | F-20 | — | silent | Several agent containers on one daemon? | Default. One daemon, one agent trust domain. |
 | F-21 | AMB-9 | §9.4 | Severity vocabulary; "review reports every refusal and exits nonzero" needs defaults that make it true. | Default. `low < medium < high < critical`; refusal = `high`; default threshold `medium`. |
 | F-22 | — | §8 | Log rotation. | Default. One file, no rotation in v1; `review` scans the whole file. |
-| F-23 | — | §5.1 "Unix socket" | Wire format unspecified. | **Decided.** HTTP/1.1 over the Unix socket, as an *internal detail*: the README describes the socket as a file you mount, not a server you reach. No TCP listener, no config key that could create one — permanent, not a v1 scoping. The brief's "signed localhost URLs" (§10.2) would need TCP and is replaced by `resolve_path` (§10.2 future, below). |
+| F-23 | — | §5.1 "Unix socket" | Wire format unspecified. | **Decided.** HTTP/1.1 over the Unix socket, as an *internal detail*: the README describes the socket as a file you mount, not a server you reach. No TCP listener, and no config key that could create one. This is permanent, not a v1 scoping. The brief's "signed localhost URLs" (§10.2) would need TCP and are replaced by `resolve_path` (§10.2). |
 | F-24 | — | §4 `put --replace` | Mid-stream failure of a replace. | Default. Old body kept until the new one commits. |
 | F-25 | — | §B2/§B3 | Hermes mirror and body sends. | Closed by F-4: no body sends in v1. |
 | F-26 | AMB-1/2 | §4, §6 | `export` needs no credential while `resolve` does; brief never says why. | **Decided** (with F-1). Export stays credential-free, both faces. An `fs` root is operator-fixed, so there's no target to lie about; `resolve` hands bytes to code that will send them somewhere, so the credential identifies trusted code. |
@@ -60,9 +60,10 @@ The brief's §11 "Open items: none" was wrong; F-1, F-2, F-6, F-7, F-17, F-26, F
 - Operator admin CLI inside the daemon container: `audit verify|review|head`, `credential issue|list|revoke`, `vault list`, `object stat`, `config check`.
 - A reference `docker-compose.yml` with daemon + socket volume + a stub agent service.
 - Docs: threat model, operator invariants, limitations.
+- *(Added 2026-10-16.)* `resolve_path` in the Python library (§10.2).
 
 ### 1.2 Out of scope (v1)
-Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, `resolve_path`, transforms, version retention, multi-agent tenancy, log rotation, key rotation, body (inline-text) sends, TCP transport (ever). Everything specific to one harness, platform or data provider (Part B, Part C).
+Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, transforms, version retention, multi-agent tenancy, log rotation, key rotation, body (inline-text) sends, TCP transport (ever). Everything specific to one harness, platform or data provider (Part B, Part C).
 
 ### 1.3 Deliverables
 `ovenmittd` image; `ovenmitt` Python package (client + MCP server); compose file; docs; test suite executing §9.
@@ -134,7 +135,7 @@ Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, 
 - **R-RES-5** No MCP tool wraps `resolve`.
 
 ### 3.7 Metadata ops (R-MET)
-- **R-MET-1** `stat`, `list(vault?)`, `label`, `delete`, `list_vaults`, `list_destinations(vault)` — any socket peer.
+- **R-MET-1** `stat`, `list(vault?)`, `label`, `delete`, `list_vaults`, `list_destinations(vault)`: any socket peer.
 - **R-MET-2** `list` ordered by `created` ascending; no pagination; hard cap 10 000 (`TOO_MANY`, not a refusal).
 
 ### 3.8 Credentials (R-CRD)
@@ -154,7 +155,7 @@ Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, 
 ### 3.10 Audit (R-AUD)
 - **R-AUD-1** Append-only JSONL at `audit_log`, single writer, one entry per line (§6.1).
 - **R-AUD-2** Hash-chained: `prev` = SHA-256 of the previous entry's canonical bytes (RFC 8785 JCS); genesis `prev` = 64 zeros; `seq` from 1.
-- **R-AUD-3** Events: `start`, `put`, `replace`, `delete`, `export`, `resolve`, `expire`, `label`, `request` (any request that could not be mapped to an operation, and any *refused* read — a `stat` of an unknown handle is logged as a refused `request`, so SI-7 holds for every refusal). Successful `stat`/`list`/`list_vaults`/`list_destinations`/`health` are not logged.
+- **R-AUD-3** Events: `start`, `put`, `replace`, `delete`, `export`, `resolve`, `expire`, `label`, `request` (any request that could not be mapped to an operation, and any *refused* read: a `stat` of an unknown handle is logged as a refused `request`, so SI-7 holds for every refusal). Successful `stat`/`list`/`list_vaults`/`list_destinations`/`health` are not logged.
 - **R-AUD-4** Outcome ∈ `ok | refused | aborted`. **Every** `refused`, including malformed requests and unknown routes, is logged with its error code.
 - **R-AUD-5** Never logged: content bytes, label text, `root`, `match`, storage paths, credential secrets, `name` unless the vault's `expose_names` is `true`.
 - **R-AUD-6** Entry written and fsynced before the response leaves the daemon.
@@ -162,13 +163,13 @@ Agent-facing CLI, `vpipe`, local mode, search, content check, sealed producers, 
 - **R-AUD-8** No endpoint exposes the log. There is no way to turn auditing off, in whole or in part.
 
 ### 3.11 Review (R-REV)
-- **R-REV-1** `ovenmitt audit review [--since DUR|TS] [--threshold low|medium|high|critical] [--json]` — rule-based, offline, reads the whole log.
+- **R-REV-1** `ovenmitt audit review [--since DUR|TS] [--threshold low|medium|high|critical] [--json]`: rule-based, offline, reads the whole log.
 - **R-REV-2** Built-in rules (§6.3): `refusal`, `first_destination`, `burst`, `churn`, `chain`. Defaults make brief §9.4 true.
 - **R-REV-3** Findings → stderr, one per line, severity-descending; `--json` on stdout. Exit 0 / 1 (at or above threshold) / 2 (cannot read log). Chain failure is `critical` and always exits 1.
 - **R-REV-4** `review` runs `verify` first and continues over the parseable prefix.
 
 ### 3.12 Deployment (R-DEP)
-- **R-DEP-1** Daemon image runs `ovenmittd` as non-root; config at `/etc/ovenmitt/ovenmitt.toml` (read-only); volumes `ovenmitt-data`, `ovenmitt-keys`, `ovenmitt-audit`, `ovenmitt-sock`.
+- **R-DEP-1** Daemon image runs `ovenmittd` as non-root; config at `/etc/ovenmitt/ovenmitt.toml` (read-only); volumes `ovenmitt-data`, `ovenmitt-keys`, `ovenmitt-audit`, `ovenmitt-sock`. The reference compose adds `ovenmitt-export` for `fs` roots.
 - **R-DEP-2** Socket `/run/ovenmitt/ovenmitt.sock` in `ovenmitt-sock`, mode `0666` (configurable `socket_mode`, `socket_group`).
 - **R-DEP-3** **No TCP listener, no config key that could create one, ever.** The HTTP framing is an internal detail; documentation presents the socket as a file you mount, not a server you reach.
 - **R-DEP-4** Reference compose mounts into the agent service only `ovenmitt-sock`. Never data, keys, audit, config, or any `fs` root.
@@ -277,7 +278,7 @@ overwrite = false              # default
 
 [vault.private.destinations.team-chat]
 kind  = "send"
-match = "chat:group/team"      # literal; operator value — platform names fine here, never in defaults
+match = "chat:group/team"      # literal; operator value, so platform names are fine here, never in defaults
 
 [vault.private.destinations.any-dm]
 kind     = "send"
@@ -501,11 +502,25 @@ c.label(handle, labels: Sequence[str]) -> ObjectInfo
 c.delete(handle) -> None
 c.export(handle, destination: str, filename: str) -> ExportResult
 c.resolve(handle, destination: str, target: str, credential: str) -> Resolved
+c.resolve_path(handle, destination, target, credential, filename) -> ContextManager[str]
 #   Resolved.stream: Iterator[bytes]; .mime; .size; .destination
 # OvenmittError(code: str, message: str, status: int)
 ```
 
-**Future (not v1): `resolve_path`.** For consumer tools that only accept a filename: the library resolves as above into a `memfd` (an anonymous RAM-backed file that never appears on any filesystem) and spawns the tool with the descriptor inherited and `/dev/fd/N` as the path. Looks and behaves like a file; exists only for that child process; no name on disk to race or `cat`; no daemon support, no TCP. This replaces the brief's "signed localhost URLs", which would need TCP. A FIFO in the socket volume is the fallback for already-running daemons and is kept out until something needs it.
+**`resolve_path` (added to v1 on 2026-10-16).** For consumer tools that only accept a filename:
+
+```python
+with c.resolve_path(handle, destination, target, credential, filename) as path:
+    send(path)   # same process, inside the block
+```
+
+The library resolves as above into a `memfd`, an anonymous RAM-backed file that never appears on any filesystem.
+It yields a symlink named `filename`, in a private temp dir, pointing at `/proc/<pid>/fd/<n>` of the calling process.
+The path is one-shot: when the block ends, the descriptor is closed and the dir removed.
+The daemon needs no change and audits it like any `resolve`. Linux only.
+This replaces the brief's "signed localhost URLs", which would need TCP.
+An earlier draft spawned a child with `/dev/fd/N` instead; the named symlink superseded it because adapters derive the attachment name and MIME type from the path.
+A FIFO in the socket volume remains the fallback for already-running daemons and is kept out until something needs it.
 
 ### 10.3 What Part A will not do for Part B
 Scrub tool results, proxy LLM calls, detect content in context, send inline text, or know anything about chats, platforms or data URIs.
@@ -514,21 +529,8 @@ Scrub tool results, proxy LLM calls, detect content in context, send inline text
 
 ## 11. Documented limitations and operator invariants
 
-These go in the docs verbatim.
-
-1. **Hard, not impossible.** The system makes accidental leakage hard. A determined agent, a lying tool, or an operator who mounts a root into the agent container can defeat it.
-2. **Two secrets.** Encryption keys never leave the daemon container. The consumer credential lives in the agent container and is the only read barrier; keep it out of the terminal tool's environment, PATH and readable files.
-3. **No credential is needed for intended use.** Putting, labelling, exporting to declared roots, deleting — all credential-free by design.
-4. **Export to a root you can see is a read path.** Unavoidable; not defended; the shipped compose never does it.
-5. **MCP `put(path)` protects from commit onward.** Producers that must never expose bytes to the agent `put` from a stream through the library.
-6. **Encryption at rest protects the data volume when it travels alone.** It never substitutes for isolation; the daemon must hold the key to run.
-7. **No physical erasure.** Delete destroys the key and unlinks the ciphertext; it doesn't scrub sectors.
-8. **`verify` cannot detect tail truncation.** Anchor `audit head` off-host on a schedule.
-9. **Caller identity is the credential.** UID/PID in the log are informational.
-10. **`expose_names` governs all objects in the vault, past and future.** Operators always see names via `object stat`.
-11. **Labels and names are agent-visible.** Don't put content in them.
-12. **Losing `keys_dir` loses every vault.** Back it up separately.
-13. **Out of scope:** determined adversaries, lying tool code, prompt-injection covert channels, disk/log-fill DoS, multiple agent trust domains.
+The limitations are maintained in [README § Limitations](README.md#limitations), and the operator invariants in [README § Operator checklist](README.md#operator-checklist).
+They follow the 0.4 text of this section, reworded for readers.
 
 ---
 
@@ -543,18 +545,18 @@ These go in the docs verbatim.
 | MCP tools | `vault_*` (unchanged; "vault" is the right model for the LLM) |
 | `v_9c1e4a` | `v_` + 12 hex |
 | `resolve(h, destination)` | `resolve(h, destination, target, credential)` |
-| signed localhost URLs (future) | `resolve_path` via memfd (future) |
+| signed localhost URLs (future) | `resolve_path` via memfd (v1 since 2026-10-16) |
 
 ---
 
-## Appendix A — Reconciliation with the second review (a separate draft, not kept in the tree)
+## Appendix A: Reconciliation with the second review (a separate draft, not kept in the tree)
 
 **Converged independently:** resolve takes name + target (F-2/AMB-5); caller identity unfixable in Docker v1 (F-6/AMB-10); pattern grammar must be fixed (F-3/AMB-4); content hash audit-only (AMB-3); handles global (AMB-6); `remove_source` client-side (F-13/AMB-11); label bounds (F-14/AMB-12); body sends need rules (F-4/AMB-8); platform names in values not defaults (F-29/AMB-13).
 
 **Adopted from the second review:** export's credential-free status elevated to a flag (F-26); optional client SHA-256 with `INTEGRITY`; the narrower trailing-`/*` grammar; generic `chat:` examples. Its degraded-vault proposal (AMB-14) was adopted in 0.2 and reversed in 0.3 for refuse-to-start (F-28). Its `E_ENCODING` became moot when body sends were removed (F-4).
 
 **Rejected:**
-- *"No operation on the library returns object bytes" (NI-1).* False — `resolve` is on the library (F-1).
+- *"No operation on the library returns object bytes" (NI-1).* False: `resolve` is on the library (F-1).
 - *Plaintext temp file during `put`, encrypted at commit.* Breaks at-rest encryption during every put and after any crash; R-CRY-5 forbids it.
 - *`hello` handshake with client-declared `role`.* Self-attestation (F-6).
 - *Custom NDJSON + binary framing.* Equivalent security, more to build, nothing on the box can test it (F-23).
@@ -564,6 +566,6 @@ These go in the docs verbatim.
 
 **Gaps shared by both drafts, fixed here only:** `list_vaults` (F-9); TTL reset (F-10); fs-root-into-agent (F-16); Hermes mirror for body sends (F-25, now moot); naming (F-17).
 
-## Appendix B — Design interview, 2026-10-12
+## Appendix B: Design interview, 2026-10-12
 
 Decisions taken, in order: F-1 framing ("hard, not impossible", two secrets); F-7 keep encryption, separate keys volume, never a substitute for isolation; F-17 `ovenmitt`; F-23 HTTP/1.1 over UDS as internal detail, no TCP ever, `resolve_path` via memfd replaces signed URLs; F-27 target always logged, no switch, no per-vault admin credential; F-5 `overwrite` in config; F-4 body sends removed; F-28 refuse to start; F-2/F-3 three-argument `resolve` and minimal grammar; F-15 names stored, operator-visible, vault setting governs all; F-8 per-object keys and crypto-shred, explicit `delete`; F-18 vault-scoped credentials; F-9 `list_vaults`, no default vault. Defaults F-10..14, F-19..22, R-OBJ-1 accepted without a round.

@@ -1,6 +1,8 @@
-# ovenmitt — BRIEF
+# ovenmitt brief
 
-*Status: brief. Decisions captured from design interview, 2026-10-12; updated the same day after PRD review (decisions 23–34). Project name is `ovenmitt`; the repo is `github.com/cyborg-garden/oven-mitt`. The hyphen is for the repo only: binary, daemon, Python package and PyPI name are `ovenmitt`, since a hyphen can't appear in an import or a sensible binary name (cf. `scikit-learn` / `sklearn`).*
+*Status: design brief, kept as the record of why ovenmitt looks the way it does. Decisions were captured in a design interview on 2026-10-12, updated the same day after PRD review (decisions 23–34), and amended on 2026-10-16 (decisions 35–37, Part B). Part A v1 is implemented; [PRD.md](PRD.md) is the specification and [README.md](README.md) describes what ships.*
+
+*The project is `ovenmitt`; the repo is `github.com/cyborg-garden/oven-mitt`. Only the repo name has a hyphen. The binary, daemon, Python package and PyPI name are `ovenmitt`, since a hyphen can't appear in an import or a sensible binary name (compare `scikit-learn` and `sklearn`).*
 
 *The one-line design criterion: make it **hard** for an agent to accidentally send protected data through its context, not impossible. Simple, elegant, free of foot-guns.*
 
@@ -9,7 +11,7 @@
 - **Part B:** The Hermes / Swarm Map integration, which ships as a separate PR.
 - **Part C:** The motivating use case.
 
-# Part A — Core (this repo)
+# Part A: Core (this repo)
 
 ## 1. Problem
 
@@ -61,7 +63,7 @@ There is also an **operator-only admin CLI** inside the daemon's container (`ove
 
 **Deployment (v1 is Docker only):** the vault volume and keys live in the daemon container only, in separate volumes. Objects are encrypted at rest (AES-256-GCM, one key per vault wrapping one key per object, held only by the daemon). Plaintext never touches disk inside the daemon. The agent container sees only the socket, so `cat` on the store is impossible: the files aren't in its filesystem.
 
-Encryption at rest protects the data volume when it travels without the keys volume (backups, snapshots). It never substitutes for isolation: the daemon has to hold the key to run, so something — Docker now, a dedicated OS user in local mode later — always keeps the key away from the agent.
+Encryption at rest protects the data volume when it travels without the keys volume (backups, snapshots). It never substitutes for isolation. The daemon has to hold the key to run, so an isolation boundary always keeps the key away from the agent: Docker now, a dedicated OS user in local mode later.
 
 Losing a vault key means losing the vault; the daemon refuses to start and names the vault. The docs say so.
 
@@ -78,7 +80,7 @@ Losing a vault key means losing the vault; the daemon refuses to start and names
 
 On the MCP face, `put` takes a path only. The LLM has no stdin to give, and it must never be able to send content itself.
 
-Not in v1: the agent-facing CLI and `vpipe` (§10.2), content search (§10.2), filter, preview, concat or transforms, partial edits, version retention, message-body (inline text) sends.
+Not in v1: the agent-facing CLI and `vpipe` (§10.2), content search (§10.2), filter, preview, concat or transforms, partial edits, version retention, and message-body (inline text) sends.
 
 ## 7. Per-vault configuration (operator-only)
 
@@ -103,7 +105,7 @@ The audit trail is first-class: it is how we stay confident the boundary holds.
 
 - **Append-only, hash-chained JSONL** in the daemon, operator-only, never exposed to the agent.
 - **Events:** put, replace, delete, export, resolve, TTL expiry, label, and **every refusal** of any kind.
-- **Fields:** timestamp, vault, handle, version hash, destination *name*, the declared *target* on resolve (always; there is no switch to turn any part of auditing off), caller (peer UID and PID for forensics, credential id for authorisation — in Docker the UID can't tell processes apart, so only the credential counts), outcome, previous-entry hash.
+- **Fields:** timestamp, vault, handle, version hash, destination *name*, the declared *target* on resolve (always; there is no switch to turn any part of auditing off), caller (peer UID and PID for forensics, credential id for authorisation; in Docker the UID can't tell processes apart, so only the credential counts), outcome, previous-entry hash.
 - **Never logged:** content, label text, real filenames (unless `expose_names`), destination roots and patterns, storage paths, credential secrets.
 - `ovenmitt audit verify` checks the chain. Anchoring the head hash off-host (`ovenmitt audit head`) is a documented manual step in v1, automated later.
 - `ovenmitt audit review [--since] [--threshold]` is **rule-based** (rules in a config file) and ranked by severity. It flags:
@@ -133,7 +135,7 @@ The end-to-end test with a real agent is in Part B (§B4).
 
 ### 10.1 v1
 
-Docker only. Rust daemon, Python client library, MCP face, operator admin CLI (audit `verify` and `review`), and a compose file. Together with the Part B PR, this makes the v1 deliverable.
+Shipped. Docker only. Rust daemon, Python client library, MCP face, operator admin CLI (audit `verify` and `review`), and a compose file. Together with the Part B integration, this makes the v1 deliverable.
 
 **Added to v1 (2026-10-16): `resolve_path`.** Platform adapters send files by path, so a sender that goes through the harness's own send interface needs bytes that look like a file. `resolve_path(handle, destination, target, credential, filename)` resolves into a `memfd` (an anonymous, RAM-backed file on no filesystem) and yields a symlink named `filename`, in a private temp dir, pointing at `/proc/self/fd/N`. The name matters because adapters derive the attachment name and MIME type from the path. The path is one-shot: it lives for one `with` block, which is one send call, and then the descriptor is closed and the dir removed. No daemon change; the daemon checks and audits it like any `resolve`. Linux only. This supersedes the spawn-a-child-with-`/dev/fd/N` sketch in §10.2. The Python package's `mcp` dependency also became an optional extra (`ovenmitt[mcp]`), so the client installs beside whatever MCP version an agent image pins.
 
@@ -189,7 +191,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 26 | Encryption at rest kept (cheap; makes delete real; protects a data volume travelling alone). Keys in a separate volume. Never a substitute for isolation |
 | 27 | Wire: HTTP/1.1 over the Unix socket as an internal detail. No TCP listener, no config key for one, ever |
 | 28 | Send-pattern grammar: a literal, optionally ending in `/*` for one segment. Nothing else |
-| 29 | Resolve target is always audited. No switch; no per-vault admin credential — the config file is the operator's authority |
+| 29 | Resolve target is always audited. No switch; no per-vault admin credential, because the config file is the operator's authority |
 | 30 | Missing vault key: refuse to start, naming the vault |
 | 31 | Filenames always stored; agent sees them iff `expose_names` is on now; operator always can |
 | 32 | Consumer credentials are scoped to a list of vaults; the vault's destination list is the only allowlist |
@@ -199,7 +201,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 | 36 | (2026-10-16) `mcp` is an optional extra of the Python package; the base package depends on `httpx` only |
 | 37 | (2026-10-16) Native harness tools that wrap the vault carry an `ovenmitt_vault_*` prefix, because a native tool has no server namespace and a harness may already call something else "the vault". The MCP face keeps `vault_*` (decision 19): its server namespace already says ovenmitt |
 
-# Part B — Harness integration (Hermes and Swarm Map)
+# Part B: Harness integration (Hermes and Swarm Map)
 
 *This part is kept separate so that Part A stays harness-independent. It's recorded here because the v1 deliverable needs both halves, and the core must be designed so this integration is straightforward.*
 
@@ -208,7 +210,7 @@ None of these is needed to start. Each is recorded so v1 doesn't rule it out.
 ## B1. Where the integration lives (amended: three homes)
 
 1. **Swarm Map PR, core wiring only:** the daemon as a per-agent compose service with its socket shared into the agent container, the generated operator config, custody of the consumer credential, and a settings card. Secret custody is what earns a place in Swarm Map itself.
-2. **`hermes-plugin/` in this repo, the generic bridge:** a Hermes plugin (`register(ctx)`) that holds the consumer credential and registers native tools (`ovenmitt_vault_put`, `_list`, `_stat`, `_label`, `_delete`, `_list_destinations`, `_send`; no export), plus a generic `ovenmitt` skill. It has nothing domain-specific in it (decision 21), and it lives beside the core so the two version together.
+2. **`hermes-plugin/` in this repo, the generic bridge (shipped):** a Hermes plugin (`register(ctx)`) that holds the consumer credential and registers native tools (`ovenmitt_vault_put`, `_list`, `_stat`, `_label`, `_delete`, `_list_destinations`, `_send`; no export), plus a generic `ovenmitt` skill. It has nothing domain-specific in it (decision 21), and it lives beside the core so the two version together.
 3. **Producers in their own repos:** for example a transcription plugin that streams an API's response into `vault.put()` and gets back only a handle.
 
 The consumer credential is given only to the bridge. It arrives as a compose `environment:` entry, never a file, and the plugin pops it out of the process environment into a closure at `register()`, so no terminal child inherits it. Residual, accepted and documented: `/proc/<gateway-pid>/environ` is readable by the same uid.
@@ -227,7 +229,7 @@ Later Swarm Map work: a vault/destination config API behind its UI, and an audit
 1. Read the current platform and chat from Hermes's session context, **never from the model's arguments** (the tool has no target argument; tested). Build `functools.partial(adapter.send_document, chat_id)` from the live adapter.
 2. The bridge's `vault_send(handle, send)` accepts only that shape and derives the claim from the very callable that will send: destination = the adapter's platform, target = `<platform>/<percent-encoded chat id>`.
 3. `with client.resolve_path(handle, destination, target, credential, filename) as p: await send(p)`. The daemon checks the target against that destination's pattern and audits both. The path dies with the block.
-4. Return only `sent ✓` and metadata to the LLM.
+4. Return only a confirmation and metadata to the LLM (`{"sent": true, "handle", "bytes", "filename"}`).
 
 v1 trusts the bridge to declare truthfully. The control that removes that trust is the content check behind an LLM proxy (§10.2, B7).
 
@@ -237,7 +239,7 @@ Reference producer: a call to a licence-restricted third-party API (Part C). Any
 
 1. The user asks the agent on Signal for something whose output must be protected.
 2. The agent calls the producer tool and receives a handle plus metadata only.
-3. The agent calls `vault_send(handle)`, and the user receives the file as a Signal attachment.
+3. The agent calls `ovenmitt_vault_send(handle)`, and the user receives the file as a Signal attachment.
 4. Each leak attempt fails safely:
    - "read it back": there is no credential-free read path, and the credential is not where the terminal tool can find it
    - `cat` on the store: not in the agent's filesystem
@@ -263,7 +265,7 @@ Reference producer: a call to a licence-restricted third-party API (Part C). Any
 - **Tool-result scrubber:** a `transform_tool_result` hook that calls the core `check` (§10.2) on every tool result and replaces any match with `[redacted: vault content]`. Tool output is the main way content enters context, and this hook can rewrite it.
 - **LLM proxy:** Hermes's base URL pointed at a proxy that calls `check` on every outgoing request and refuses on a match. It's the only way to block a whole request, since no Hermes hook can.
 
-# Part C — Motivating case: a licence that restricts onward sharing
+# Part C: Motivating case, a licence that restricts onward sharing
 
 This part is context for *why* the design is strict. Nothing in it is a mode, flag or name in the software.
 
