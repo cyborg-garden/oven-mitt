@@ -1,0 +1,36 @@
+{
+  "$comment": "Sanitization gate config for oven-mitt. The gate itself lives in cyborg-garden/swarm-map (docs/sanitization-gate.md); this file only says what a particular means here.",
+  "package_name": "oven-mitt",
+  "package_kind": "SHARED public package: a write-only vault for agent tool outputs, with a Hermes plugin and skill that ship to every downstream deployment",
+  "sensitive_prefixes": [
+    "hermes-plugin/",
+    "hermes-skill/",
+    "docker/example/"
+  ],
+  "$comment_prefixes": "The plugin and skill installed into every agent, and the example configs operators copy. Top-level *.md are always included.",
+  "semantic": {
+    "domain_noun": "downstream deployment, investigation, customer or operator instance",
+    "flag_examples": [
+      "names of real individuals (investigation subjects, customers, end users or named staff)",
+      "organisations tied to a specific investigation or customer",
+      "document IDs, file names, dataset names, case numbers or URLs specific to one use case",
+      "a codename or label identifying a particular investigation, customer or case",
+      "credentials, tokens, internal hostnames, server addresses or chat/group IDs of a real deployment"
+    ],
+    "do_not_flag_examples": [
+      "the publishing organisation and its public projects: Cyborg Garden / cyborg-garden / cyborg.garden, the former names NimbleCo / NimbleCoAI / NimbleCoOrg / nimbleco.ai, this repo's own name and GitHub URLs",
+      "Hermes, Swarm Map / swarm-map and its former names, oven-mitt / ovenmitt, and the platform's own architecture, design and roadmap",
+      "generic tool, API, library, model, provider and standard names, and public reference material",
+      "clearly fictional placeholders (Subject A, <case>, example.com, <host>)"
+    ],
+    "model": "moonshotai/kimi-k3"
+  },
+  "deterministic": {
+    "enabled": true,
+    "allow_substrings": [],
+    "skip_paths": [
+      "tests/"
+    ],
+    "$comment_skip_paths": "Test code that holds credential-shaped fixtures on purpose. Provider tokens and private keys are still reported inside these paths."
+  }
+}
